@@ -1,5 +1,5 @@
 // Business logic on top of the store: rows, masters, users, approvals, ledger, dashboard.
-const { FIRST_ROW, LAST_ROW, SHEETS, MASTERS, ROLES, colIndex, colLetter, inputCols } = require('./schema');
+const { FIRST_ROW, LAST_ROW, SHEETS, MASTERS, colIndex, colLetter, inputCols } = require('./schema');
 
 const IST_MIN = 330;
 const APPROVAL_MINUTES = 30;
@@ -94,41 +94,6 @@ class DataService {
     }));
   }
 
-  // ---------- users & roles ----------
-  async users() {
-    const [grid] = await this.get([`Users!A3:E102`]);
-    return grid.map((r, i) => ({
-      row: 3 + i, email: String(r[0] || '').trim().toLowerCase(), name: String(r[1] || '').trim(),
-      role: ROLES.find((x) => x.toLowerCase() === String(r[2] || '').trim().toLowerCase()) || '',
-      active: String(r[3] || '').trim().toLowerCase() !== 'no', notes: r[4] || '',
-    })).filter((u) => u.email.includes('@'));
-  }
-
-  async userFor(email) {
-    email = String(email || '').toLowerCase();
-    const admins = (process.env.ADMIN_EMAILS || '').toLowerCase().split(',').map((s) => s.trim());
-    const u = (await this.users()).find((x) => x.email === email);
-    if (u && u.active && u.role) return { email, name: u.name || email, role: u.role };
-    if (admins.includes(email)) return { email, name: u?.name || email.split('@')[0], role: 'Admin' };
-    return null;
-  }
-
-  async saveUser(body) {
-    const email = String(body.email || '').trim().toLowerCase();
-    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) throw httpError(400, 'Enter a valid email address');
-    if (!ROLES.includes(body.role)) throw httpError(400, 'Pick a role');
-    return this.withLock('Users', async () => {
-      const [grid] = await this.get([`Users!A3:E102`], { fresh: true });
-      let idx = grid.findIndex((r) => String(r[0] || '').trim().toLowerCase() === email);
-      if (idx < 0) idx = grid.findIndex((r) => isEmpty(r[0]));
-      if (idx < 0) idx = grid.length;
-      if (idx >= 100) throw httpError(400, 'Users list is full (100)');
-      const row = 3 + idx;
-      await this.write([{ range: `Users!A${row}:E${row}`, values: [[email, safeText(body.name || ''), body.role, body.active === false ? 'No' : 'Yes', safeText(body.notes || '')]] }]);
-      return { row };
-    });
-  }
-
   // ---------- edit requests ----------
   async requests() {
     const [grid] = await this.get([`'Edit Requests'!A3:I1002`]);
@@ -217,11 +182,11 @@ class DataService {
         if (cur[c] !== '') locked.push(c);
       }
       if (!Object.keys(changed).length) return { row, changed: 0 };
-      if (locked.length && user.role !== 'Admin') {
+      if (locked.length && user.perms?.[key] !== 'edit') {
         const ok = await this.approvalFor(sh.name, row, user.email);
         if (!ok) throw httpError(403, 'Saved values are locked. Send an edit request to the Admin first.');
       }
-      await this.checkRules(key, { ...pickInputs(sh, cur), ...changed }, all, row, ctx);
+      await this.checkRules(key, { ...pickInputs(sh, cur), ...changed }, all, row, ctx, changed);
       await this.write(cellWrites(sh, row, changed));
       for (const c of locked) {
         const label = sh.cols.find((x) => x.c === c).label;
@@ -270,8 +235,17 @@ class DataService {
     return out;
   }
 
-  async checkRules(key, v, all, row, ctx) {
+  async checkRules(key, v, all, row, ctx, changed = null) {
     const others = all.filter((r) => r._row !== row);
+    // money into a bank account (GPay, UPI, NEFT, card...) needs its UTR / reference number
+    for (const c of SHEETS[key].cols.filter((x) => x.refOf)) {
+      const touched = !changed || [c.c, c.refOf, c.amountOf].some((k) => k in changed);
+      const amt = Number(v[c.amountOf]) || 0, acc = String(v[c.refOf] || '');
+      if (touched && amt > 0 && acc && !/cash/i.test(acc) && !String(v[c.c] || '').trim()) {
+        const what = SHEETS[key].cols.find((x) => x.c === c.amountOf).label;
+        throw httpError(400, `${what} went to ${acc}: enter its UTR / reference no (GPay, UPI, NEFT, card).`);
+      }
+    }
     if (key === 'stock' && v.E !== undefined && v.E !== '') {
       if (others.some((r) => String(r.E).toLowerCase() === String(v.E).toLowerCase())) throw httpError(400, 'This engine number is already in stock');
     }
@@ -307,14 +281,15 @@ class DataService {
       if (!account || !date || (!inAmt && !outAmt)) return;
       lines.push({ date, account, in: inAmt || 0, out: outAmt || 0, text, from });
     };
-    bk.forEach((r) => add(r.A, r.H, +r.G || 0, 0, `Booking advance – ${r.B} (${r.D})`, `Bookings · row ${r._row}`));
+    const utr = (x) => (x ? ` · UTR ${x}` : '');
+    bk.forEach((r) => add(r.A, r.H, +r.G || 0, 0, `Booking advance – ${r.B} (${r.D})${utr(r.Q)}`, `Bookings · row ${r._row}`));
     sl.forEach((r) => {
-      add(r.T, r.U, +r.S || 0, 0, `Payment 1 – ${r.B} (${r.E})`, `Vehicle Sales · row ${r._row}`);
-      add(r.W, r.X, +r.V || 0, 0, `Payment 2 – ${r.B} (${r.E})`, `Vehicle Sales · row ${r._row}`);
-      add(r.Z, r.AA, +r.Y || 0, 0, `Payment 3 – ${r.B} (${r.E})`, `Vehicle Sales · row ${r._row}`);
+      add(r.T, r.U, +r.S || 0, 0, `Payment 1 – ${r.B} (${r.E})${utr(r.AM)}`, `Vehicle Sales · row ${r._row}`);
+      add(r.W, r.X, +r.V || 0, 0, `Payment 2 – ${r.B} (${r.E})${utr(r.AN)}`, `Vehicle Sales · row ${r._row}`);
+      add(r.Z, r.AA, +r.Y || 0, 0, `Payment 3 – ${r.B} (${r.E})${utr(r.AO)}`, `Vehicle Sales · row ${r._row}`);
       add(r.AD, r.AE, +r.AC || 0, 0, `DD received – ${r.B} (${r.J})`, `Vehicle Sales · row ${r._row}`);
     });
-    sv.forEach((r) => add(r.A, r.F, +r.E || 0, 0, `Service – ${r.B} ${r.C}`.trim(), `Service · row ${r._row}`));
+    sv.forEach((r) => add(r.A, r.F, +r.E || 0, 0, `Service – ${r.B} ${r.C}`.trim() + utr(r.H), `Service · row ${r._row}`));
     ex.forEach((r) => add(r.A, r.E, +r.F || 0, +r.G || 0, `${r.B} [${r.D}]`, `Expenses · row ${r._row}`));
     be.forEach((r) => {
       add(r.A, r.B, +r.E || 0, +r.F || 0, `${r.C} [${r.D}]`, `Bank Entries · row ${r._row}`);

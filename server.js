@@ -1,39 +1,37 @@
-// RE Showroom web app: Google sign-in + roles from the Users tab, data in the Google Sheet.
+// RE Showroom web app: username/password sign-in, roles with per-section access, data in the Google Sheet.
 const express = require('express');
 const crypto = require('crypto');
 const path = require('path');
-const { OAuth2Client } = require('google-auth-library');
 const { makeStore } = require('./store');
 const { DataService } = require('./data');
-const { SHEETS, ROLES } = require('./schema');
+const { SHEETS } = require('./schema');
+const { Accounts, MODULES, LEVELS, rank } = require('./accounts');
+const { toExcel, toPdf } = require('./export');
 
 const PORT = process.env.PORT || 3000;
-const CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '';
-const SECRET = process.env.SESSION_SECRET || crypto.randomBytes(32).toString('hex');
 const SHOWROOM = process.env.SHOWROOM_NAME || 'Royal Enfield Showroom';
 const SESSION_HOURS = 12;
 
 const { store, demo } = makeStore();
 const data = new DataService(store);
-const oauth = new OAuth2Client(CLIENT_ID);
-const app = express();
+const accounts = new Accounts();
+// signing key: env if given, else one generated once and kept with the accounts
+if (!accounts.db.secret) { accounts.db.secret = crypto.randomBytes(32).toString('hex'); accounts.save(); }
+const SECRET = process.env.SESSION_SECRET || accounts.db.secret;
 
+const app = express();
 app.disable('x-powered-by');
 app.set('trust proxy', 1);
-app.use(express.json({ limit: '200kb' }));
+app.use(express.json({ limit: '6mb' }));
 app.use((req, res, next) => {
-  res.set({
-    'X-Content-Type-Options': 'nosniff',
-    'Referrer-Policy': 'strict-origin-when-cross-origin',
-    'X-Frame-Options': 'DENY',
-  });
+  res.set({ 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'strict-origin-when-cross-origin', 'X-Frame-Options': 'DENY' });
   next();
 });
 
 // ---------- session cookie (signed, httpOnly) ----------
 const sign = (s) => crypto.createHmac('sha256', SECRET).update(s).digest('base64url');
-function setSession(res, email) {
-  const body = Buffer.from(JSON.stringify({ email, exp: Date.now() + SESSION_HOURS * 3600e3 })).toString('base64url');
+function setSession(res, user) {
+  const body = Buffer.from(JSON.stringify({ uid: user.id, ver: user.ver || 0, exp: Date.now() + SESSION_HOURS * 3600e3 })).toString('base64url');
   res.setHeader('Set-Cookie', `re_sess=${body}.${sign(body)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${SESSION_HOURS * 3600}${process.env.NODE_ENV === 'production' ? '; Secure' : ''}`);
 }
 function readSession(req) {
@@ -43,59 +41,58 @@ function readSession(req) {
   if (!body || !sig) return null;
   const a = Buffer.from(sig), b = Buffer.from(sign(body));
   if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return null;
-  try {
-    const s = JSON.parse(Buffer.from(body, 'base64url').toString());
-    return s.exp > Date.now() ? s : null;
-  } catch { return null; }
+  try { const s = JSON.parse(Buffer.from(body, 'base64url').toString()); return s.exp > Date.now() ? s : null; } catch { return null; }
 }
 
 const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
+const deny = (res, msg = 'You do not have access to this. Ask the Admin.') => res.status(403).json({ error: msg });
 
-// every request re-checks the Users tab, so removing someone takes effect at once
-const auth = (...roles) => wrap(async (req, res, next) => {
+// signed in; `check` decides access for this route
+const auth = (check) => (req, res, next) => {
   const s = readSession(req);
-  if (!s) return res.status(401).json({ error: 'Please sign in' });
-  const user = await data.userFor(s.email);
-  if (!user) return res.status(403).json({ error: 'Your account is not active. Ask the Admin.' });
-  if (roles.length && !roles.includes(user.role)) return res.status(403).json({ error: 'You do not have permission for this' });
+  const user = s && accounts.session(s.uid, s.ver);
+  if (!user) return res.status(401).json({ error: 'Please sign in' });
   req.user = user;
-  next();
-});
-// state-changing calls must come from our own page (blocks cross-site form posts)
-const sameOrigin = (req, res, next) => {
-  if (req.get('X-RE-App') !== '1') return res.status(400).json({ error: 'Bad request' });
+  if (user.mustChange && !req.path.startsWith('/api/auth/')) return res.status(403).json({ error: 'Please set a new password first', mustChange: true });
+  if (check && !check(user, req)) return deny(res);
   next();
 };
-const writers = ['Admin', 'Manager', 'Staff'];
+const can = (key, level) => (u, req) => rank(u.perms[typeof key === 'function' ? key(req) : key]) >= rank(level);
+const sheetKey = (req) => req.params.key;
+const sameOrigin = (req, res, next) => (req.get('X-RE-App') === '1' ? next() : res.status(400).json({ error: 'Bad request' }));
 
 // ---------- public ----------
 app.get('/healthz', (req, res) => res.json({ ok: true, demo }));
-app.get('/api/config', (req, res) => res.json({ clientId: CLIENT_ID, demo, showroom: SHOWROOM }));
+app.get('/api/config', (req, res) => res.json({ demo, showroom: SHOWROOM, needsSetup: accounts.needsSetup(), persistent: accounts.persistent }));
 
-app.post('/api/auth/google', sameOrigin, wrap(async (req, res) => {
-  const ticket = await oauth.verifyIdToken({ idToken: String(req.body.credential || ''), audience: CLIENT_ID })
-    .catch(() => null);
-  const p = ticket && ticket.getPayload();
-  if (!p || !p.email_verified) return res.status(401).json({ error: 'Google sign-in failed. Try again.' });
-  const user = await data.userFor(p.email);
-  if (!user) return res.status(403).json({ error: `${p.email} is not in the Users list. Ask the Admin to add you.` });
-  setSession(res, user.email);
-  res.json({ user: { ...user, picture: p.picture } });
-}));
+app.post('/api/auth/setup', sameOrigin, (req, res, next) => {
+  try {
+    accounts.setup(req.body || {});
+    const user = accounts.login(req.body.username, req.body.password, req.ip);
+    setSession(res, user);
+    res.json({ ok: true });
+  } catch (e) { next(e); }
+});
 
-// demo mode only: pick a role without Google
-app.post('/api/auth/demo', sameOrigin, wrap(async (req, res) => {
-  if (!demo) return res.status(404).json({ error: 'Not available' });
-  const role = ROLES.includes(req.body.role) ? req.body.role : 'Staff';
-  const email = `${role.toLowerCase()}@demo.local`;
-  if (role !== 'Admin' && !(await data.userFor(email))) await data.saveUser({ email, name: `Demo ${role}`, role });
-  setSession(res, email);
-  res.json({ user: await data.userFor(email) });
-}));
+app.post('/api/auth/login', sameOrigin, (req, res, next) => {
+  try {
+    const user = accounts.login(req.body?.username, req.body?.password, req.ip);
+    setSession(res, user);
+    res.json({ ok: true, mustChange: !!user.mustChange });
+  } catch (e) { next(e); }
+});
 
 app.post('/api/auth/logout', (req, res) => {
   res.setHeader('Set-Cookie', 're_sess=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0');
   res.json({ ok: true });
+});
+
+app.post('/api/auth/password', sameOrigin, auth(), (req, res, next) => {
+  try {
+    const u = accounts.changeOwnPassword(req.user.id, req.body?.current, req.body?.next);
+    setSession(res, u);
+    res.json({ ok: true });
+  } catch (e) { next(e); }
 });
 
 // ---------- signed in ----------
@@ -103,17 +100,27 @@ app.get('/api/me', auth(), (req, res) => res.json({ user: req.user, demo }));
 
 app.get('/api/bootstrap', auth(), wrap(async (req, res) => {
   const [{ lists }, engines] = await Promise.all([data.masters(), data.engines()]);
-  res.json({ user: req.user, schema: SHEETS, lists, engines, demo, showroom: SHOWROOM });
+  res.json({ user: req.user, schema: SHEETS, modules: MODULES, levels: LEVELS, lists, engines, demo, showroom: SHOWROOM, persistent: accounts.persistent });
 }));
 
-app.get('/api/dashboard', auth(), wrap(async (req, res) => res.json(await data.dashboard())));
-app.get('/api/ledger', auth(), wrap(async (req, res) => res.json(await data.ledger())));
+app.get('/api/dashboard', auth(can('dashboard', 'view')), wrap(async (req, res) => {
+  const d = await data.dashboard();
+  // money in the bank, transfers and expenses only for roles that can see the Bank Ledger
+  if (rank(req.user.perms.ledger) < rank('view')) {
+    const hide = new Set(['BANK DEPOSIT', 'BANK TRANSFER', 'OPENING BALANCE', 'CLOSING BALANCE', 'CASH + BANK BALANCE', 'EXPENSES PAID · MONTH']);
+    d.today = d.today.filter((t) => !hide.has(t.label));
+    d.month = d.month.filter((t) => !hide.has(t.label));
+    d.bank = []; d.bankTotal = null; d.expenses = []; d.restricted = true;
+  }
+  res.json(d);
+}));
+app.get('/api/ledger', auth(can('ledger', 'view')), wrap(async (req, res) => res.json(await data.ledger())));
 
-app.get('/api/sheets/:key', auth(), wrap(async (req, res) => {
+app.get('/api/sheets/:key', auth(can(sheetKey, 'view')), wrap(async (req, res) => {
   const [rows, reqs] = await Promise.all([data.rows(req.params.key), data.requests()]);
   const name = SHEETS[req.params.key]?.name;
   const now = Date.now() / 86400000 + 25569 + 330 / 1440;
-  const mine = reqs.filter((r) => r.sheet === name && (req.user.role === 'Admin' || r.by === req.user.email));
+  const mine = reqs.filter((r) => r.sheet === name && (req.user.approve || r.by === req.user.email));
   res.json({
     rows,
     pending: mine.filter((r) => r.status === 'Pending').map((r) => r.row),
@@ -121,33 +128,49 @@ app.get('/api/sheets/:key', auth(), wrap(async (req, res) => {
   });
 }));
 
-app.post('/api/sheets/:key', sameOrigin, auth(...writers), wrap(async (req, res) => {
+app.post('/api/sheets/:key', sameOrigin, auth(can(sheetKey, 'add')), wrap(async (req, res) => {
   res.json(await data.create(req.user, req.params.key, req.body || {}));
 }));
-
-app.put('/api/sheets/:key/:row', sameOrigin, auth(...writers), wrap(async (req, res) => {
+app.put('/api/sheets/:key/:row', sameOrigin, auth(can(sheetKey, 'add')), wrap(async (req, res) => {
   res.json(await data.update(req.user, req.params.key, Number(req.params.row), req.body || {}));
 }));
-
-app.post('/api/sheets/:key/:row/request', sameOrigin, auth(...writers), wrap(async (req, res) => {
+app.post('/api/sheets/:key/:row/request', sameOrigin, auth(can(sheetKey, 'add')), wrap(async (req, res) => {
   res.json(await data.requestEdit(req.user, req.params.key, Number(req.params.row), req.body?.reason));
 }));
 
 app.get('/api/requests', auth(), wrap(async (req, res) => {
   const all = await data.requests();
-  const list = req.user.role === 'Admin' ? all : all.filter((r) => r.by === req.user.email);
-  res.json({ requests: list.reverse() });
+  res.json({ requests: (req.user.approve ? all : all.filter((r) => r.by === req.user.email)).reverse() });
 }));
-
-app.post('/api/requests/:id', sameOrigin, auth('Admin'), wrap(async (req, res) => {
+app.post('/api/requests/:id', sameOrigin, auth((u) => u.approve), wrap(async (req, res) => {
   res.json(await data.decide(req.user, Number(req.params.id), req.body?.status));
 }));
 
-app.get('/api/users', auth('Admin'), wrap(async (req, res) => res.json({ users: await data.users() })));
-app.post('/api/users', sameOrigin, auth('Admin'), wrap(async (req, res) => res.json(await data.saveUser(req.body || {}))));
+// ---------- Excel / PDF export of what the page shows ----------
+app.post('/api/export', sameOrigin, auth(), wrap(async (req, res) => {
+  const fmt = req.body?.format === 'pdf' ? 'pdf' : 'xlsx';
+  const when = new Date(Date.now() + 330 * 60000).toISOString().slice(0, 16).replace('T', ' ');
+  const meta = { showroom: SHOWROOM, user: req.user.name, when };
+  const buf = fmt === 'pdf' ? await toPdf(req.body, meta) : await toExcel(req.body, meta);
+  const base = String(req.body?.title || 'report').replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '').toLowerCase() || 'report';
+  res.set({
+    'Content-Type': fmt === 'pdf' ? 'application/pdf' : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'Content-Disposition': `attachment; filename="${base}-${when.slice(0, 10)}.${fmt}"`,
+  });
+  res.send(Buffer.from(buf));
+}));
+
+// ---------- users & roles ----------
+const admin = auth((u) => u.manageUsers);
+const json = (fn) => (req, res, next) => { try { res.json(fn(req) ?? { ok: true }); } catch (e) { next(e); } };
+app.get('/api/access', admin, json(() => ({ users: accounts.listUsers(), roles: accounts.listRoles(), modules: MODULES, levels: LEVELS })));
+app.post('/api/access/users', sameOrigin, admin, json((req) => accounts.createUser(req.body || {}, req.user.username)));
+app.put('/api/access/users/:id', sameOrigin, admin, json((req) => accounts.updateUser(req.params.id, req.body || {}, req.user)));
+app.post('/api/access/roles', sameOrigin, admin, json((req) => accounts.saveRole(req.body || {})));
+app.delete('/api/access/roles/:id', sameOrigin, admin, json((req) => { accounts.deleteRole(req.params.id); }));
 
 // ---------- static UI ----------
-const PUBLIC = { '/app.js': 'app.js', '/style.css': 'style.css' };   // only these files are served
+const PUBLIC = { '/app.js': 'app.js', '/icons.js': 'icons.js', '/style.css': 'style.css' };   // only these files are served
 app.get(Object.keys(PUBLIC), (req, res) => res.sendFile(path.join(__dirname, PUBLIC[req.path]), { maxAge: '1h' }));
 app.get('*', (req, res) => {
   if (req.path.startsWith('/api/')) return res.status(404).json({ error: 'Not found' });
@@ -167,6 +190,6 @@ app.use((err, req, res, next) => {
 
 app.listen(PORT, () => {
   console.log(`RE Showroom app on :${PORT}  ${demo ? '(DEMO MODE: sample data in memory)' : '(Google Sheet: ' + process.env.SHEET_ID + ', service account ' + store.email + ')'}`);
-  if (!demo && !CLIENT_ID) console.warn('GOOGLE_CLIENT_ID is not set: nobody can sign in.');
-  if (!process.env.SESSION_SECRET) console.warn('SESSION_SECRET is not set: sessions reset on every restart.');
+  console.log(`Accounts saved in ${accounts.file}${accounts.persistent ? '' : '  (WARNING: not on a volume, accounts are lost on redeploy)'}`);
+  if (accounts.setupCode) console.log(`\n  FIRST-TIME SETUP CODE: ${accounts.setupCode}\n  Open the app and use this code to create the Admin account.\n`);
 });

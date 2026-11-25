@@ -24,7 +24,7 @@ const SHEETS = {
     list: ['A', 'B', 'C', 'D', 'E', 'G', 'H', 'I', 'J'],
   },
   bookings: {
-    name: 'Bookings', title: 'Bookings', icon: 'calendar', last: 'P', key: 'B',
+    name: 'Bookings', title: 'Bookings', icon: 'calendar', last: 'Q', key: 'B',
     cols: [
       { c: 'A', label: 'Booking date', type: 'date', req: true },
       { c: 'B', label: 'Customer name', type: 'text', req: true },
@@ -34,6 +34,7 @@ const SHEETS = {
       { c: 'F', label: 'Colour', type: 'list', list: 'colours' },
       { c: 'G', label: 'Booking amount', type: 'money' },
       { c: 'H', label: 'Received in', type: 'list', list: 'accounts' },
+      { c: 'Q', label: 'UTR / reference no', type: 'text', refOf: 'H', amountOf: 'G' },
       { c: 'I', label: 'Commitment date', type: 'date' },
       { c: 'J', label: 'Allotted engine no', type: 'engine', engineFor: 'booking' },
       { c: 'K', label: 'Allotment', type: 'auto', status: true },
@@ -46,11 +47,11 @@ const SHEETS = {
     list: ['A', 'B', 'C', 'D', 'G', 'I', 'K', 'J', 'O'],
   },
   sales: {
-    name: 'Vehicle Sales', title: 'Vehicle Sales', icon: 'receipt', last: 'AL', key: 'B',
+    name: 'Vehicle Sales', title: 'Vehicle Sales', icon: 'receipt', last: 'AO', key: 'B',
     groups: [
       { title: 'Customer & bike', cols: ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J'] },
       { title: 'Vehicle cost', cols: ['K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R'] },
-      { title: 'Customer payments', cols: ['S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', 'AA'] },
+      { title: 'Customer payments', cols: ['S', 'T', 'U', 'AM', 'V', 'W', 'X', 'AN', 'Y', 'Z', 'AA', 'AO'] },
       { title: 'Finance DD (HP only)', cols: ['AB', 'AC', 'AD', 'AE'], hpOnly: true },
       { title: 'Tally', cols: ['AF', 'AG', 'AH', 'AI', 'AJ', 'AK', 'AL'] },
     ],
@@ -93,11 +94,14 @@ const SHEETS = {
       { c: 'AJ', label: 'Payment status', type: 'auto', status: true },
       { c: 'AK', label: 'Booking type', type: 'auto' },
       { c: 'AL', label: 'Check', type: 'auto', check: true },
+      { c: 'AM', label: 'Payment 1 UTR / ref no', type: 'text', refOf: 'U', amountOf: 'S' },
+      { c: 'AN', label: 'Payment 2 UTR / ref no', type: 'text', refOf: 'X', amountOf: 'V' },
+      { c: 'AO', label: 'Payment 3 UTR / ref no', type: 'text', refOf: 'AA', amountOf: 'Y' },
     ],
     list: ['A', 'B', 'C', 'E', 'I', 'Q', 'AI', 'AJ'],
   },
   service: {
-    name: 'Service', title: 'Service', icon: 'wrench', last: 'G', key: 'B',
+    name: 'Service', title: 'Service', icon: 'wrench', last: 'H', key: 'B',
     cols: [
       { c: 'A', label: 'Date', type: 'date', req: true },
       { c: 'B', label: 'Customer name', type: 'text', req: true },
@@ -105,6 +109,7 @@ const SHEETS = {
       { c: 'D', label: 'Service type', type: 'list', list: 'serviceTypes', req: true },
       { c: 'E', label: 'Bill value', type: 'money' },
       { c: 'F', label: 'Received in', type: 'list', list: 'accounts' },
+      { c: 'H', label: 'UTR / reference no', type: 'text', refOf: 'F', amountOf: 'E' },
       { c: 'G', label: 'Check', type: 'auto', check: true },
     ],
     list: ['A', 'B', 'C', 'D', 'E', 'F', 'G'],

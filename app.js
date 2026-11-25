@@ -12,34 +12,13 @@
   const fdate = (s) => { if (!s || typeof s !== 'string' || !/^\d{4}-\d{2}-\d{2}/.test(s)) return s ?? ''; const [y, m, d] = s.slice(0, 10).split('-'); return `${+d} ${MON[+m - 1]} ${y}`; };
   const fmonth = (s) => { if (!s) return ''; const [y, m] = s.split('-'); return `${MON[+m - 1]} ${y}`; };
   const todayIso = () => { const d = new Date(Date.now() + (330 + new Date().getTimezoneOffset()) * 60000); return d.toISOString().slice(0, 10); };
-  const isWriter = () => ['Admin', 'Manager', 'Staff'].includes(S.user?.role);
-  const isAdmin = () => S.user?.role === 'Admin';
+  const RANK = { none: 0, view: 1, add: 2, edit: 3 };
+  const canDo = (k, l) => RANK[S.user?.perms?.[k] || 'none'] >= RANK[l];
   const initials = (n) => String(n || '?').split(/[\s@.]+/).filter(Boolean).slice(0, 2).map((x) => x[0].toUpperCase()).join('');
 
-  const ICON = {
-    dash: '<path d="M3 13h8V3H3zM13 21h8V11h-8zM3 21h8v-6H3zM13 3v6h8V3z"/>',
-    bike: '<circle cx="5.5" cy="17.5" r="3.5"/><circle cx="18.5" cy="17.5" r="3.5"/><path d="M15 6h2l3 7.5M5.5 17.5 9 10h6l3.5 7.5M9 10 7.5 6H5"/>',
-    calendar: '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>',
-    receipt: '<path d="M4 2v20l3-2 3 2 3-2 3 2 3-2 1 .7V2l-1 .7-3-2-3 2-3-2-3 2-3-2z"/><path d="M8 8h8M8 12h8M8 16h5"/>',
-    wrench: '<path d="M14.7 6.3a4 4 0 0 0 5 5L22 14l-8 8-2.3-2.3a4 4 0 0 0-5-5L2 10l8-8z"/>',
-    wallet: '<path d="M20 7H5a2 2 0 0 1 0-4h13v4"/><path d="M3 5v14a2 2 0 0 0 2 2h15V7"/><circle cx="16" cy="14" r="1.2"/>',
-    bank: '<path d="M3 21h18M5 21V10M9 21V10M15 21V10M19 21V10M2 10 12 3l10 7z"/>',
-    book: '<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V2H6.5A2.5 2.5 0 0 0 4 4.5z"/><path d="M4 19.5A2.5 2.5 0 0 0 6.5 22H20v-5"/>',
-    check: '<path d="M20 6 9 17l-5-5"/>',
-    shield: '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/>',
-    users: '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8"/>',
-    plus: '<path d="M12 5v14M5 12h14"/>',
-    x: '<path d="M18 6 6 18M6 6l12 12"/>',
-    lock: '<rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>',
-    unlock: '<rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 7.9-1"/>',
-    clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
-    out: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>',
-    menu: '<path d="M3 6h18M3 12h18M3 18h18"/>',
-    info: '<circle cx="12" cy="12" r="9"/><path d="M12 8h.01M11 12h1v5h1"/>',
-    edit: '<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>',
-    refresh: '<path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/>',
-  };
-  const ic = (n) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICON[n] || ''}</svg>`;
+  // Lucide icons (icons.js); old names kept as aliases
+  const ALIAS = { bike: 'stock', calendar: 'bookings', receipt: 'sales', wrench: 'service', wallet: 'expenses', book: 'ledger', shield: 'approvals' };
+  const ic = (n) => `<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${(window.LUCIDE || {})[ALIAS[n] || n] || ''}</svg>`;
 
   function toast(msg, err = false) {
     const t = document.createElement('div');
@@ -57,7 +36,7 @@
     });
     let out = {};
     try { out = await res.json(); } catch { /* empty */ }
-    if (!res.ok) { const e = new Error(out.error || 'Request failed'); e.status = res.status; throw e; }
+    if (!res.ok) { const e = new Error(out.error || 'Request failed'); e.status = res.status; e.mustChange = !!out.mustChange; throw e; }
     return out;
   }
 
@@ -94,74 +73,145 @@
   }
   const colOf = (key, c) => S.schema[key].cols.find((x) => x.c === c);
 
-  // ---------- login ----------
+  // ---------- sign in / first setup / new password ----------
+  function authCard(inner) {
+    $app.innerHTML = `<div class="login"><div class="login-side"><div class="login-brand">${esc(S.showroom || 'Royal Enfield Showroom')}</div>
+      <p>Stock, bookings, sales, service and accounts for the showroom, in one place.</p></div>
+      <div class="login-main"><div class="login-card">${inner}</div></div></div>`;
+  }
+  const pwField = (name, label, auto) => `<div class="field"><label for="${name}">${label}</label><div class="pw"><input id="${name}" name="${name}" type="password" autocomplete="${auto}" required><button type="button" class="icon-btn pw-eye" aria-label="Show password">${ic('eye')}</button></div></div>`;
+  function wirePw() {
+    document.querySelectorAll('.pw-eye').forEach((b) => b.onclick = () => {
+      const i = b.previousElementSibling; const show = i.type === 'password';
+      i.type = show ? 'text' : 'password'; b.innerHTML = ic(show ? 'eyeOff' : 'eye');
+    });
+  }
   async function renderLogin(error) {
     const cfg = await fetch('/api/config').then((r) => r.json()).catch(() => ({}));
-    $app.innerHTML = `
-      <div class="login"><div class="login-card">
-        <div class="brand-mark">RE</div>
-        <h1>${esc(cfg.showroom || 'Royal Enfield Showroom')}</h1>
-        <p>Sign in with your Google account</p>
-        ${cfg.demo ? `
-          <div class="notice warn" style="text-align:left">${ic('info')}<div><b>Demo mode.</b> Sample data, not your Google Sheet. Pick a role to look around.</div></div>
-          <div class="demo-roles">${['Admin', 'Manager', 'Staff', 'Viewer'].map((r) => `<button class="btn ${r === 'Admin' ? 'navy' : ''}" data-demo="${r}">${r}</button>`).join('')}</div>`
-        : cfg.clientId ? `<div class="gbtn" id="gbtn"><div class="spinner"></div></div>`
-        : `<div class="err">Google sign-in is not set up yet: add GOOGLE_CLIENT_ID in Railway (see README).</div>`}
-        ${error ? `<div class="err">${esc(error)}</div>` : ''}
-        <div class="login-foot">Only people added by the Admin in the Users list can sign in.</div>
-      </div></div>`;
-    $app.querySelectorAll('[data-demo]').forEach((b) => b.onclick = async () => {
-      try { await api('POST', '/api/auth/demo', { role: b.dataset.demo }); boot(); } catch (e) { renderLogin(e.message); }
-    });
-    if (!cfg.demo && cfg.clientId) {
-      const s = document.createElement('script');
-      s.src = 'https://accounts.google.com/gsi/client';
-      s.onload = () => {
-        google.accounts.id.initialize({
-          client_id: cfg.clientId, ux_mode: 'popup',
-          callback: async (r) => {
-            try { await api('POST', '/api/auth/google', { credential: r.credential }); boot(); }
-            catch (e) { renderLogin(e.message); }
-          },
-        });
-        const el = document.getElementById('gbtn');
-        el.innerHTML = '';
-        google.accounts.id.renderButton(el, { theme: 'filled_blue', size: 'large', shape: 'pill', text: 'signin_with', width: 280 });
-      };
-      document.head.appendChild(s);
-    }
+    S.showroom = cfg.showroom || S.showroom;
+    if (cfg.needsSetup) return renderSetup(error);
+    authCard(`
+      <h1>Sign in</h1>
+      <p class="muted">Use the username and password the Admin gave you.</p>
+      <form id="lf" novalidate>
+        <div class="field"><label for="username">Username</label><input id="username" name="username" autocomplete="username" autocapitalize="none" spellcheck="false" required></div>
+        ${pwField('password', 'Password', 'current-password')}
+        ${error ? `<div class="form-err">${ic('alert')}<span>${esc(error)}</span></div>` : ''}
+        <button class="btn primary block" type="submit">Sign in</button>
+      </form>
+      <div class="login-foot">Forgot your password? Ask the Admin to reset it.</div>`);
+    wirePw();
+    document.getElementById('username').focus();
+    document.getElementById('lf').onsubmit = async (e) => {
+      e.preventDefault();
+      const fd = Object.fromEntries(new FormData(e.target));
+      if (!fd.username || !fd.password) return renderLogin('Enter your username and password.');
+      try { await api('POST', '/api/auth/login', fd); boot(); } catch (err) { renderLogin(err.message); }
+    };
+  }
+  function renderSetup(error) {
+    authCard(`
+      <h1>Create the Admin account</h1>
+      <p class="muted">First time only. The setup code is in the Railway deploy logs of this app.</p>
+      <form id="sf" novalidate>
+        <div class="field"><label for="code">Setup code</label><input id="code" name="code" placeholder="XXXX-XXXX" autocomplete="off" required></div>
+        <div class="field"><label for="name">Your name</label><input id="name" name="name" autocomplete="name" required></div>
+        <div class="field"><label for="username">Username</label><input id="username" name="username" autocomplete="username" autocapitalize="none" spellcheck="false" required></div>
+        ${pwField('password', 'Password (at least 6 characters)', 'new-password')}
+        ${error ? `<div class="form-err">${ic('alert')}<span>${esc(error)}</span></div>` : ''}
+        <button class="btn primary block" type="submit">Create Admin and sign in</button>
+      </form>`);
+    wirePw();
+    document.getElementById('sf').onsubmit = async (e) => {
+      e.preventDefault();
+      try { await api('POST', '/api/auth/setup', Object.fromEntries(new FormData(e.target))); boot(); } catch (err) { renderSetup(err.message); }
+    };
+  }
+  function renderNewPassword(error) {
+    authCard(`
+      <h1>Set your own password</h1>
+      <p class="muted">The Admin created this password for you. Choose a new one that only you know.</p>
+      <form id="pf" novalidate>
+        ${pwField('current', 'Password from the Admin', 'current-password')}
+        ${pwField('next', 'New password (at least 6 characters)', 'new-password')}
+        ${error ? `<div class="form-err">${ic('alert')}<span>${esc(error)}</span></div>` : ''}
+        <button class="btn primary block" type="submit">Save password</button>
+      </form>
+      <div class="login-foot"><a href="#" id="so">Sign out</a></div>`);
+    wirePw();
+    document.getElementById('so').onclick = async (e) => { e.preventDefault(); await api('POST', '/api/auth/logout'); renderLogin(); };
+    document.getElementById('pf').onsubmit = async (e) => {
+      e.preventDefault();
+      try { await api('POST', '/api/auth/password', Object.fromEntries(new FormData(e.target))); toast('Password saved'); boot(); }
+      catch (err) { renderNewPassword(err.message); }
+    };
+  }
+  function changePassword() {
+    const m = document.createElement('div');
+    m.className = 'modal';
+    m.innerHTML = `<div class="scrim"></div><form class="box" id="cp" novalidate>
+      <h3>Change password</h3><p>You stay signed in on this device. Other devices are signed out.</p>
+      ${pwField('current', 'Current password', 'current-password')}
+      <div style="height:12px"></div>${pwField('next', 'New password (at least 6 characters)', 'new-password')}
+      <div class="acts"><button type="button" class="btn" id="c">Cancel</button><button class="btn primary" type="submit">Save password</button></div></form>`;
+    document.body.appendChild(m);
+    wirePw();
+    m.querySelector('#current').focus();
+    m.querySelector('#c').onclick = () => m.remove();
+    m.querySelector('.scrim').onclick = () => m.remove();
+    m.querySelector('#cp').onsubmit = async (e) => {
+      e.preventDefault();
+      try { await api('POST', '/api/auth/password', Object.fromEntries(new FormData(e.target))); m.remove(); toast('Password changed'); }
+      catch (err) { toast(err.message, true); }
+    };
   }
 
   // ---------- shell ----------
   const NAV = [
-    ['Overview', [['#/dashboard', 'Dashboard', 'dash']]],
-    ['Showroom', [['#/s/stock', 'Vehicle Stock', 'bike'], ['#/s/bookings', 'Bookings', 'calendar'], ['#/s/sales', 'Vehicle Sales', 'receipt'], ['#/s/service', 'Service', 'wrench']]],
-    ['Accounts', [['#/s/expenses', 'Expenses', 'wallet'], ['#/s/bank', 'Bank Entries', 'bank'], ['#/ledger', 'Bank Ledger', 'book']]],
-    ['Control', [['#/approvals', 'Edit Requests', 'shield'], ['#/users', 'Users', 'users', true]]],
+    ['', [['#/dashboard', 'Dashboard', 'dash', 'dashboard']]],
+    ['Showroom', [['#/s/stock', 'Vehicle Stock', 'stock', 'stock'], ['#/s/bookings', 'Bookings', 'bookings', 'bookings'], ['#/s/sales', 'Vehicle Sales', 'sales', 'sales'], ['#/s/service', 'Service', 'service', 'service']]],
+    ['Accounts', [['#/s/expenses', 'Expenses', 'expenses', 'expenses'], ['#/s/bank', 'Bank Entries', 'bank', 'bank'], ['#/ledger', 'Bank Ledger', 'ledger', 'ledger']]],
+    ['Control', [['#/approvals', 'Edit Requests', 'approvals', '@approvals'], ['#/access', 'Users & Roles', 'roles', '@users']]],
   ];
+  const navAllowed = (k) => k === '@users' ? !!S.user.manageUsers
+    : k === '@approvals' ? (S.user.approve || Object.values(S.user.perms || {}).some((v) => v === 'add'))
+    : canDo(k, 'view');
+  const firstPage = () => { for (const [, items] of NAV) for (const i of items) if (navAllowed(i[3])) return i[0]; return null; };
 
   function shell(title, sub, actions, body) {
     const route = location.hash || '#/dashboard';
     $app.innerHTML = `
       <div class="shell">
         <aside class="side" id="side">
-          <div class="side-brand"><div class="brand-mark">RE</div><div><b>${esc(S.showroom)}</b><small>Showroom manager</small></div></div>
-          <nav class="nav">${NAV.map(([sec, items]) => `<div class="sec">${sec}</div>` + items.filter((i) => !i[3] || isAdmin()).map(([href, label, icon]) =>
-            `<a href="${href}" class="${route.startsWith(href) ? 'on' : ''}">${ic(icon)}<span>${label}</span>${href === '#/approvals' && S.pendingCount ? `<span class="badge">${S.pendingCount}</span>` : ''}</a>`).join('')).join('')}</nav>
-          <div class="side-user"><div class="avatar">${esc(initials(S.user.name))}</div>
-            <div class="who"><b>${esc(S.user.name)}</b><small title="${esc(S.user.email)}">${esc(S.user.role)}</small></div>
-            <button class="icon-btn" id="logout" title="Sign out">${ic('out')}</button></div>
+          <div class="side-brand"><b>${esc(S.showroom)}</b><span>Showroom manager</span></div>
+          <nav class="nav">${NAV.map(([sec, items]) => { const ok = items.filter((i) => navAllowed(i[3])); return ok.length ? (sec ? `<div class="sec">${sec}</div>` : '') + ok.map(([href, label, icon]) =>
+            `<a href="${href}" class="${route.startsWith(href) ? 'on' : ''}">${ic(icon)}<span>${label}</span>${href === '#/approvals' && S.pendingCount ? `<span class="badge">${S.pendingCount}</span>` : ''}</a>`).join('') : ''; }).join('')}</nav>
+          ${S.demo ? '<div class="side-note">Demo data: entries are not saved to the Google Sheet.</div>' : ''}
         </aside>
         <div class="main">
-          ${S.demo ? '<div class="demo-bar"><b>Demo mode:</b> sample data only. Changes are not saved to the Google Sheet and are lost on restart.</div>' : ''}
-          <header class="top">
-            <button class="icon-btn menu-btn" id="menu">${ic('menu')}</button>
+          <header class="topbar">
+            <button class="icon-btn menu-btn" id="menu" aria-label="Menu">${ic('menu')}</button>
+            <div class="grow"></div>
+            <div class="usermenu">
+              <button class="user-btn" id="um" aria-haspopup="true"><span class="avatar">${esc(initials(S.user.name))}</span><span class="un"><b>${esc(S.user.name)}</b><small>${esc(S.user.role)}</small></span>${ic('chevron')}</button>
+              <div class="menu" id="umenu" hidden>
+                <div class="menu-h">Signed in as <b>${esc(S.user.username)}</b></div>
+                <button id="cpw">${ic('key')}Change password</button>
+                <button id="logout">${ic('out')}Sign out</button>
+              </div>
+            </div>
+          </header>
+          <div class="page-h">
             <div><h2>${esc(title)}</h2>${sub ? `<div class="sub">${sub}</div>` : ''}</div>
             <div class="grow"></div>${actions || ''}
-          </header>
+          </div>
           <main class="content" id="content">${body}</main>
         </div>
       </div>`;
+    const menu = document.getElementById('umenu');
+    document.getElementById('um').onclick = (e) => { e.stopPropagation(); menu.hidden = !menu.hidden; };
+    document.addEventListener('click', () => (menu.hidden = true), { once: true });
+    document.getElementById('cpw').onclick = () => { menu.hidden = true; changePassword(); };
     document.getElementById('logout').onclick = async () => { await api('POST', '/api/auth/logout'); S.user = null; renderLogin(); };
     const side = document.getElementById('side');
     document.getElementById('menu').onclick = (e) => { e.stopPropagation(); side.classList.toggle('open'); };
@@ -205,33 +255,33 @@
     const maxExp = Math.max(0, ...d.expenses.map((e) => e.paid));
     const old = d.ageing.slice(2).reduce((s, a) => s + a.bikes, 0);
 
-    shell('Dashboard', esc(longDate), `<button class="btn" id="refresh">${ic('refresh')}Refresh</button>`, `
-      <section class="hero">
+    shell('Dashboard', esc(longDate), `<button class="btn" id="refresh">${ic('refresh')}<span class="new-label">Refresh</span></button>` + exportBtn(), `
+      ${d.restricted ? '' : `<section class="hero">
         <div>
           <div class="lbl">Cash and bank balance</div>
           <div class="big">${inr(close, false)}</div>
           <div class="chg">${change === 0 ? 'No change today' : `<b class="${change < 0 ? 'neg' : ''}">${change > 0 ? '+' : '−'}${inr(Math.abs(change), false)}</b> today`}</div>
         </div>
         <div class="accts">${d.bank.map((b) => `<div class="acct"><span>${esc(b.account)}</span><b>${inr(b.closing, false)}</b></div>`).join('')}</div>
-      </section>
+      </section>`}
 
-      <div class="section-h"><h3>Today</h3></div>
-      <div class="panel strip" style="--n:6">
+      <div class="section-h" ${d.restricted ? 'style="margin-top:4px"' : ''}><h3>Today</h3></div>
+      <div class="panel strip" style="--n:${d.restricted ? 4 : 6}">
         ${stat('Bikes sold', T['SALES TODAY'], `HP ${num(T['HP SALES'])} · Cash ${num(T['CASH SALES'])}`)}
         ${stat('Sales value', T['SALES VALUE (ON-ROAD)'], 'on-road price', true)}
         ${stat('New bookings', T['BOOKINGS TODAY'])}
         ${stat('Service billed', T['SERVICE AMOUNT'], '', true)}
-        ${stat('Cash deposited', T['BANK DEPOSIT'], 'into bank', true)}
-        ${stat('Bank transfers', T['BANK TRANSFER'], 'between accounts', true)}
+        ${d.restricted ? '' : `${stat('Cash deposited', T['BANK DEPOSIT'], 'into bank', true)}
+        ${stat('Bank transfers', T['BANK TRANSFER'], 'between accounts', true)}`}
       </div>
 
       <div class="section-h"><h3>${esc(monthName)}</h3><span>month to date</span></div>
-      <div class="panel strip" style="--n:6">
+      <div class="panel strip" style="--n:${d.restricted ? 5 : 6}">
         ${stat('Bikes sold', M['VEHICLES SOLD · MONTH'])}
         ${stat('Collections', M['CUSTOMER COLLECTIONS · MONTH'], 'from customers', true)}
         ${stat('Finance DD received', M['DD RECEIVED · MONTH'], '', true)}
         ${stat('Service revenue', M['SERVICE REVENUE · MONTH'], '', true)}
-        ${stat('Expenses paid', M['EXPENSES PAID · MONTH'], '', true)}
+        ${d.restricted ? '' : stat('Expenses paid', M['EXPENSES PAID · MONTH'], '', true)}
         ${stat('Open bookings', M['OPEN BOOKINGS'], d.overdue.length ? `<span class="bad">${d.overdue.length} overdue</span>` : 'none overdue')}
       </div>
 
@@ -265,9 +315,9 @@
               <div class="muted" style="font-size:12.5px;margin-top:8px">Teal is stock, amber is customers waiting for a bike. Red means order more.</div>` : '<div class="empty-line">No bikes in stock and nobody waiting.</div>'}
           </div></div>
 
-          <div class="panel"><div class="panel-h"><h3>Expenses</h3><small>${esc(monthName)}</small></div><div class="panel-b">
+          ${d.restricted ? '' : `<div class="panel"><div class="panel-h"><h3>Expenses</h3><small>${esc(monthName)}</small></div><div class="panel-b">
             ${d.expenses.length ? `<ul class="rows">${d.expenses.map((e) => `<li><div class="who"><b>${esc(e.category)}</b></div><div class="barline">${bar(e.paid, maxExp, 'navy')}</div><div class="amt" style="width:90px">${inr(e.paid, false)}</div></li>`).join('')}</ul>` : '<div class="empty-line">No expenses this month.</div>'}
-          </div></div>
+          </div></div>`}
 
           <div class="panel"><div class="panel-h"><h3>Sales mix</h3><small>${esc(monthName)}</small></div><div class="panel-b">
             <ul class="rows">${d.mix.map((m) => `<li><div class="who"><b>${esc(m.mode === 'HP' ? 'Finance (HP)' : m.mode)}</b></div><div class="amt"><b>${m.count}</b> <span class="muted">${m.count === 1 ? 'bike' : 'bikes'}</span></div></li>`).join('')}
@@ -276,6 +326,67 @@
         </div>
       </div>`);
     document.getElementById('refresh').onclick = () => pageDashboard();
+    const kv = (label, v, money) => [label, money ? inr(v, false) : String(num(v))];
+    wireExport(() => ({
+      title: 'Daily Report', subtitle: longDate,
+      sections: [
+        d.restricted ? null : { heading: 'Cash and bank', columns: [{ label: 'Account' }, { label: 'Opening', type: 'money' }, { label: 'Received', type: 'money' }, { label: 'Paid', type: 'money' }, { label: 'Closing', type: 'money' }],
+          rows: d.bank.map((b) => [b.account, b.opening, b.received, b.paid, b.closing]), totals: ['Total', d.bankTotal.opening, d.bankTotal.received, d.bankTotal.paid, d.bankTotal.closing] },
+        { heading: 'Today', columns: [{ label: 'Item' }, { label: 'Value' }], rows: [
+          kv('Bikes sold', T['SALES TODAY']), kv('HP sales', T['HP SALES']), kv('Cash sales', T['CASH SALES']), kv('Sales value (on-road)', T['SALES VALUE (ON-ROAD)'], true),
+          kv('New bookings', T['BOOKINGS TODAY']), kv('Service billed', T['SERVICE AMOUNT'], true), kv('Cash deposited into bank', T['BANK DEPOSIT'], true),
+          kv('Bank transfers', T['BANK TRANSFER'], true), kv('Opening balance', open, true), kv('Closing balance', close, true)].filter((r) => !d.restricted || !/bank|balance/i.test(r[0])) },
+        { heading: `${monthName} to date`, columns: [{ label: 'Item' }, { label: 'Value' }], rows: [
+          kv('Bikes sold', M['VEHICLES SOLD · MONTH']), kv('Collections from customers', M['CUSTOMER COLLECTIONS · MONTH'], true), kv('Finance DD received', M['DD RECEIVED · MONTH'], true),
+          kv('Service revenue', M['SERVICE REVENUE · MONTH'], true), kv('Expenses paid', M['EXPENSES PAID · MONTH'], true), kv('Open bookings', M['OPEN BOOKINGS']), kv('Customer balance due', M['CUSTOMER BALANCE DUE'], true)].filter((r) => !d.restricted || r[0] !== 'Expenses paid') },
+        { heading: 'Overdue bookings', columns: [{ label: 'Customer' }, { label: 'Mobile' }, { label: 'Model' }, { label: 'Promised', type: 'date' }, { label: 'Days late', type: 'num' }, { label: 'Advance', type: 'money' }],
+          rows: d.overdue.map((o) => [o.customer, o.mobile, o.model, o.commitment, o.late, o.advance]) },
+        { heading: 'Customer balance and DD pending', columns: [{ label: 'Customer' }, { label: 'Mobile' }, { label: 'Model' }, { label: 'Sold on', type: 'date' }, { label: 'Customer owes', type: 'money' }, { label: 'DD pending', type: 'money' }],
+          rows: d.balances.map((b) => [b.customer, b.mobile, b.model, b.date, b.owes || '', b.dd || '']), totals: ['Total', '', '', '', d.balances.reduce((x, b) => x + b.owes, 0), ddPending] },
+        { heading: 'Stock by model', columns: [{ label: 'Model' }, { label: 'Available', type: 'num' }, { label: 'Allotted', type: 'num' }, { label: 'Sold this month', type: 'num' }, { label: 'Waiting customers', type: 'num' }],
+          rows: d.models.filter((m) => m.available + m.allotted + m.sold + m.waiting > 0).map((m) => [m.model, m.available, m.allotted, m.sold, m.waiting]) },
+        d.restricted ? null : { heading: `Expenses in ${monthName}`, columns: [{ label: 'Category' }, { label: 'Paid', type: 'money' }], rows: d.expenses.map((e) => [e.category, e.paid]), totals: ['Total', d.expenses.reduce((x, e) => x + e.paid, 0)] },
+      ].filter(Boolean),
+    }));
+  }
+
+  // ---------- Excel / PDF export ----------
+  const exportBtn = () => `<div class="xmenu"><button class="btn" id="xbtn" aria-haspopup="true">${ic('download')}<span class="new-label">Export</span>${ic('chevron')}</button>
+    <div class="menu" id="xmenu" hidden><button data-x="xlsx">${ic('xlsx')}Excel (.xlsx)</button><button data-x="pdf">${ic('pdf')}PDF</button></div></div>`;
+  function wireExport(build) {
+    const btn = document.getElementById('xbtn'), menu = document.getElementById('xmenu');
+    if (!btn) return;
+    btn.onclick = (e) => { e.stopPropagation(); menu.hidden = !menu.hidden; if (!menu.hidden) document.addEventListener('click', () => (menu.hidden = true), { once: true }); };
+    menu.querySelectorAll('[data-x]').forEach((b) => b.onclick = async (e) => {
+      e.stopPropagation(); menu.hidden = true;
+      const fmt = b.dataset.x;
+      btn.disabled = true;
+      try {
+        const res = await fetch('/api/export', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json', 'X-RE-App': '1' }, body: JSON.stringify({ ...build(fmt), format: fmt }) });
+        if (!res.ok) { let m = 'Export failed'; try { m = (await res.json()).error || m; } catch { /* */ } throw new Error(m); }
+        const blob = await res.blob();
+        const name = ((res.headers.get('Content-Disposition') || '').match(/filename="([^"]+)"/) || [])[1] || `report.${fmt}`;
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+        toast(`Downloaded ${name}`);
+      } catch (err) { toast(err.message, true); } finally { btn.disabled = false; }
+    });
+  }
+  // a sheet column as an export column + value
+  const xType = (c) => (c.type === 'money' || c.money ? 'money' : c.type === 'date' ? 'date' : 'text');
+  const xVal = (c, v) => (v === '' || v === null || v === undefined ? '' : (c.status || c.check) ? indianAmounts(pillText(String(v))) : xType(c) === 'money' ? num(v) : v);
+  const colSort = (a, b) => (a.c.length - b.c.length) || (a.c < b.c ? -1 : 1);
+  function sheetReport(key, rows, filterLabel, query, fmt) {
+    const sh = S.schema[key];
+    // Excel: every column in sheet order; PDF: the columns shown on screen
+    const cols = fmt === 'pdf' ? sh.list.map((c) => colOf(key, c)) : sh.cols.slice().sort(colSort);
+    const totals = cols.map((c, i) => (xType(c) === 'money' ? rows.reduce((s, r) => s + num(r[c.c]), 0) : i === 0 ? `Total (${rows.length})` : ''));
+    return {
+      title: sh.title,
+      subtitle: `${filterLabel}${query ? ` · search "${query}"` : ''} · ${rows.length} ${rows.length === 1 ? 'entry' : 'entries'}`,
+      sections: [{ heading: sh.title, columns: cols.map((c) => ({ label: c.label, type: xType(c) })), rows: rows.map((r) => cols.map((c) => xVal(c, r[c.c]))), totals }],
+    };
   }
 
   // ---------- sheet list pages ----------
@@ -329,11 +440,12 @@
       </div>
       <div class="panel desk-table">${rows.length ? `<div class="tbl-wrap"><table><thead><tr>${cols.map((c) => `<th class="${c.type === 'money' || c.money ? 'num' : ''}">${esc(c.label)}</th>`).join('')}</tr></thead><tbody>
         ${rows.map((r) => `<tr class="click" data-row="${r._row}">${cols.map((c, i) => `<td class="${c.type === 'money' || c.money ? 'num' : c.type === 'date' ? 'date' : i === 1 ? 'wrap' : ''}">${i === 1 ? nameCell(c, r) : cellHtml(c, r[c.c])}</td>`).join('')}</tr>`).join('')}
-        </tbody></table></div>` : `<div class="empty">Nothing here yet.${isWriter() ? ' Use the button above to add the first entry.' : ''}</div>`}</div>
+        </tbody></table></div>` : `<div class="empty">Nothing here yet.${canDo(key, 'add') ? ' Use the button above to add the first entry.' : ''}</div>`}</div>
       <div class="mob-cards">${rows.map((r) => `<div class="mcard" data-row="${r._row}"><div class="t"><b>${esc(mobTitle[key](r))}</b>${pill(r[mobPill[key]])}</div>
         <div class="m">${mobMeta[key](r).filter(Boolean).map((x) => `<span>${esc(x)}</span>`).join('')}${flag(r)}</div></div>`).join('') || '<div class="empty">Nothing here yet.</div>'}</div>`;
     const sub = key === 'bookings' ? 'Sold bookings move to Delivered automatically' : `${res.rows.length} entries`;
-    shell(sh.title, sub, isWriter() ? `<button class="btn primary" id="new">${ic('plus')}<span class="new-label">${NEW_LABEL[key]}</span></button>` : '', body);
+    shell(sh.title, sub, exportBtn() + (canDo(key, 'add') ? `<button class="btn primary" id="new">${ic('plus')}<span class="new-label">${NEW_LABEL[key]}</span></button>` : ''), body);
+    wireExport((fmt) => sheetReport(key, rows, f[1], S.q[key] || '', fmt));
     const q = document.getElementById('q');
     q.oninput = () => { S.q[key] = q.value; const pos = q.selectionStart; renderSheet(key); const n = document.getElementById('q'); n.focus(); n.setSelectionRange(pos, pos); };
     document.querySelectorAll('[data-f]').forEach((b) => b.onclick = () => { S.filter[key] = b.dataset.f; renderSheet(key); });
@@ -378,13 +490,13 @@
     const form = {};
     sh.cols.forEach((c) => (form[c.c] = isNew ? '' : rec[c.c]));
     if (isNew) sh.cols.forEach((c) => { if (c.type === 'date' && c.req) form[c.c] = todayIso(); });
-    const canEdit = (c) => c.type !== 'auto' && isWriter() && (isNew || form[c.c] === '' || rec[c.c] === '' || isAdmin() || !!approved);
+    const canEdit = (c) => c.type !== 'auto' && canDo(key, 'add') && (isNew || form[c.c] === '' || rec[c.c] === '' || canDo(key, 'edit') || !!approved);
     const lockedAny = !isNew && sh.cols.some((c) => c.type !== 'auto' && rec[c.c] !== '' && !canEdit(c));
     const groups = sh.groups || [{ title: 'Details', cols: sh.cols.map((c) => c.c) }];
 
     const fieldHtml = (c) => {
       const v = form[c.c];
-      const hp = c.hpOnly ? ` data-hp="1"` : '';
+      const hp = (c.hpOnly ? ` data-hp="1"` : '') + (c.refOf ? ` data-ref="${c.refOf}"` : '');
       if (c.type === 'auto') {
         if (isNew && key !== 'sales') return '';
         if (isNew) return `<div class="field"${hp}><label>${esc(c.label)}</label><div class="ro auto" data-auto="${c.c}">${cellHtml(c, v) || '<span class="muted">auto</span>'}</div></div>`;
@@ -406,7 +518,7 @@
       } else if (c.type === 'phone') {
         input = `<input type="tel" inputmode="numeric" maxlength="10" name="${c.c}" value="${esc(v)}" placeholder="10-digit mobile">`;
       } else {
-        input = `<input type="text" name="${c.c}" value="${esc(v)}" maxlength="200">`;
+        input = `<input type="text" name="${c.c}" value="${esc(v)}" maxlength="200"${c.refOf ? ' placeholder="UTR / transaction ID" autocomplete="off" spellcheck="false"' : ''}>`;
       }
       return `<div class="field"${hp}><label>${esc(c.label)}${req}</label>${input}</div>`;
     };
@@ -414,8 +526,8 @@
     let notice = '';
     if (!isNew && approved) notice = `<div class="notice ok">${ic('unlock')}<div><b>Edit approved.</b> This entry is open for you for about ${approved.minutes} more minutes.</div></div>`;
     else if (!isNew && pending) notice = `<div class="notice warn">${ic('clock')}<div><b>Edit request sent.</b> Waiting for the Admin to approve it.</div></div>`;
-    else if (!isNew && lockedAny && isWriter()) notice = `<div class="notice info">${ic('lock')}<div>Saved values are locked. You can fill empty fields. To change a saved value, send an edit request to the Admin.</div></div>`;
-    else if (!isNew && isAdmin()) notice = `<div class="notice info">${ic('info')}<div>You are the Admin: changes to saved values are written to the Edit Log.</div></div>`;
+    else if (!isNew && lockedAny && canDo(key, 'add')) notice = `<div class="notice info">${ic('lock')}<div>Saved values are locked. You can fill empty fields. To change a saved value, send an edit request to the Admin.</div></div>`;
+    else if (!isNew && canDo(key, 'edit')) notice = `<div class="notice info">${ic('info')}<div>You can change saved values. Every change is written to the Edit Log with your name.</div></div>`;
 
     const title = isNew ? NEW_LABEL[key] : (key === 'stock' ? `${rec.B} · ${rec.E}` : key === 'bank' ? rec.C : rec.B);
     const d = drawer(`
@@ -427,16 +539,23 @@
         ${groups.map((g) => { const inner = g.cols.map((c) => fieldHtml(colOf(key, c))).join(''); return inner ? `<div class="fgroup"${g.hpOnly ? ' data-hp="1"' : ''}><h4>${esc(g.title)}</h4><div class="fgrid">${inner}</div></div>` : ''; }).join('')}
       </form>
       <div class="drawer-f">
-        ${!isNew && lockedAny && isWriter() && !approved && !pending ? `<button class="btn" id="reqedit">${ic('shield')}Request edit</button>` : ''}
+        ${!isNew && lockedAny && canDo(key, 'add') && !approved && !pending ? `<button class="btn" id="reqedit">${ic('shield')}Request edit</button>` : ''}
         <div style="flex:1"></div>
-        <button class="btn" data-close>${isWriter() ? 'Cancel' : 'Close'}</button>
-        ${isWriter() && (isNew || sh.cols.some(canEdit)) ? `<button class="btn primary" id="save">${ic('check')}${isNew ? 'Save entry' : 'Save changes'}</button>` : ''}
+        <button class="btn" data-close>${canDo(key, 'add') ? 'Cancel' : 'Close'}</button>
+        ${canDo(key, 'add') && (isNew || sh.cols.some(canEdit)) ? `<button class="btn primary" id="save">${ic('check')}${isNew ? 'Save entry' : 'Save changes'}</button>` : ''}
       </div>`);
 
     const f = d.querySelector('#f');
     const read = () => { f.querySelectorAll('[name]').forEach((el) => (form[el.name] = el.value)); };
     const sync = () => {
       read();
+      // UTR / reference: only for money into a bank account (GPay, UPI, NEFT, card)
+      d.querySelectorAll('[data-ref]').forEach((el) => {
+        const acc = String(form[el.dataset.ref] || '');
+        const input = el.querySelector('input');
+        const filled = input ? input.value.trim() !== '' : el.querySelector('.ro')?.textContent.trim() !== '–';
+        el.style.display = (acc && !/cash/i.test(acc)) || filled ? '' : 'none';
+      });
       if (key === 'sales') {
         const hp = form.I === 'HP';
         d.querySelectorAll('[data-hp]').forEach((el) => (el.style.display = hp || (!isNew && !canEdit(colOf(key, 'I')) && rec.I === 'HP') ? '' : 'none'));
@@ -529,7 +648,7 @@
     S.ledgerAcc = S.ledgerAcc && L.accounts.some((a) => a.account === S.ledgerAcc) ? S.ledgerAcc : L.accounts[0]?.account;
     const a = L.accounts.find((x) => x.account === S.ledgerAcc) || { lines: [] };
     const total = L.accounts.reduce((s, x) => s + x.closing, 0);
-    shell('Bank Ledger', 'Every payment with an account posts here automatically', '', `
+    shell('Bank Ledger', 'Every payment with an account posts here automatically', exportBtn(), `
       ${L.unposted > 0 ? `<div class="notice warn">${ic('info')}<div><b>${inr(L.unposted)}</b> received without an account selected. Open the entry and pick "Received in".</div></div>` : ''}
       <div class="panel" style="margin-bottom:16px"><div class="tbl-wrap"><table><thead><tr><th>Account</th><th class="num hide-m">Opening</th><th class="num hide-m">Received</th><th class="num hide-m">Paid</th><th class="num">Closing</th></tr></thead><tbody>
         ${L.accounts.map((x) => `<tr class="click" data-acc="${esc(x.account)}"><td class="strong">${esc(x.account)}</td><td class="num hide-m">${inr(x.opening)}</td><td class="num in hide-m">${inr(x.received)}</td><td class="num out hide-m">${inr(x.paid)}</td><td class="num"><b>${inr(x.closing)}</b></td></tr>`).join('')}
@@ -542,6 +661,17 @@
         <tr><td></td><td class="muted">Opening balance</td><td class="hide-m"></td><td class="num">${inr(a.opening, false)}</td><td class="hide-m"></td></tr>
       </tbody></table></div>` : '<div class="empty">No entries for this account yet.</div>'}</div>`);
     document.querySelectorAll('[data-acc]').forEach((b) => b.onclick = () => { S.ledgerAcc = b.dataset.acc; pageLedger(); });
+    wireExport(() => ({
+      title: `Bank Ledger · ${a.account}`, subtitle: `Statement of ${a.account} with all-account summary`,
+      sections: [
+        { heading: 'All accounts', columns: [{ label: 'Account' }, { label: 'Opening', type: 'money' }, { label: 'Received', type: 'money' }, { label: 'Paid', type: 'money' }, { label: 'Closing', type: 'money' }],
+          rows: L.accounts.map((x) => [x.account, x.opening, x.received, x.paid, x.closing]),
+          totals: ['Total', L.accounts.reduce((s2, x) => s2 + x.opening, 0), L.accounts.reduce((s2, x) => s2 + x.received, 0), L.accounts.reduce((s2, x) => s2 + x.paid, 0), total] },
+        { heading: `${a.account} statement`, columns: [{ label: 'Date', type: 'date' }, { label: 'Particulars' }, { label: 'From' }, { label: 'In', type: 'money' }, { label: 'Out', type: 'money' }, { label: 'Balance', type: 'money' }],
+          rows: [['', 'Opening balance', '', '', '', a.opening], ...a.lines.map((l) => [l.date, l.text, l.from, l.in || '', l.out || '', l.balance])],
+          totals: ['', 'Closing balance', '', a.received, a.paid, a.closing] },
+      ],
+    }));
   }
 
   // ---------- edit requests ----------
@@ -552,67 +682,182 @@
     loading('Edit Requests');
     const { requests } = await api('GET', '/api/requests');
     const pend = requests.filter((r) => r.status === 'Pending');
-    S.pendingCount = isAdmin() ? pend.length : 0;
+    S.pendingCount = S.user.approve ? pend.length : 0;
     const row = (r) => `<tr>
       <td class="date">${esc(serialToText(r.at))}</td><td>${esc(r.by)}</td>
       <td><a href="#/s/${sheetKeyByName(r.sheet) || ''}">${esc(r.sheet)}</a> · row ${r.row}<div class="muted">${esc(r.entry)}</div></td>
       <td>${esc(r.reason)}</td><td>${pill(r.status)}${r.decidedBy ? `<div class="muted" style="font-size:12px">${esc(r.decidedBy)}</div>` : ''}</td>
-      <td class="num">${isAdmin() && r.status === 'Pending' ? `<button class="btn sm primary" data-ok="${r.id}">Approve</button> <button class="btn sm danger" data-no="${r.id}">Reject</button>` : ''}</td></tr>`;
+      <td class="num">${S.user.approve && r.status === 'Pending' ? `<button class="btn sm primary" data-ok="${r.id}">Approve</button> <button class="btn sm danger" data-no="${r.id}">Reject</button>` : ''}</td></tr>`;
     const table = (list, empty) => list.length ? `<div class="tbl-wrap"><table><thead><tr><th>When</th><th>Requested by</th><th>Entry</th><th>Reason</th><th>Status</th><th></th></tr></thead><tbody>${list.map(row).join('')}</tbody></table></div>` : `<div class="empty">${empty}</div>`;
-    shell('Edit Requests', isAdmin() ? 'Approve to open that entry for 30 minutes, only for the person who asked' : 'Your requests to change saved entries', '', `
-      ${isAdmin() ? `<div class="panel" style="margin-bottom:16px"><div class="panel-h"><h3>Waiting for you</h3><small>${pend.length}</small></div>${table(pend, 'No pending requests.')}</div>` : ''}
-      <div class="panel"><div class="panel-h"><h3>${isAdmin() ? 'History' : 'My requests'}</h3></div>${table(isAdmin() ? requests.filter((r) => r.status !== 'Pending') : requests, 'No requests yet. Open a saved entry and use "Request edit".')}</div>`);
+    shell('Edit Requests', S.user.approve ? 'Approve to open that entry for 30 minutes, only for the person who asked' : 'Your requests to change saved entries', exportBtn(), `
+      ${S.user.approve ? `<div class="panel" style="margin-bottom:16px"><div class="panel-h"><h3>Waiting for you</h3><small>${pend.length}</small></div>${table(pend, 'No pending requests.')}</div>` : ''}
+      <div class="panel"><div class="panel-h"><h3>${S.user.approve ? 'History' : 'My requests'}</h3></div>${table(S.user.approve ? requests.filter((r) => r.status !== 'Pending') : requests, 'No requests yet. Open a saved entry and use "Request edit".')}</div>`);
     const decide = async (id, status) => {
       try { await api('POST', `/api/requests/${id}`, { status }); toast(status === 'Approved' ? 'Approved: entry open for 30 minutes' : 'Request rejected'); pageApprovals(); }
       catch (e) { toast(e.message, true); }
     };
     document.querySelectorAll('[data-ok]').forEach((b) => b.onclick = () => decide(Number(b.dataset.ok), 'Approved'));
+    wireExport(() => ({ title: 'Edit Requests', subtitle: `${requests.length} requests`, sections: [{ heading: 'Edit requests',
+      columns: ['When', 'Requested by', 'Sheet', 'Row', 'Entry', 'Reason', 'Status', 'Decided by'].map((l) => ({ label: l })),
+      rows: requests.map((r) => [serialToText(r.at), r.by, r.sheet, r.row, r.entry, r.reason, r.status, r.decidedBy]) }] }));
     document.querySelectorAll('[data-no]').forEach((b) => b.onclick = () => decide(Number(b.dataset.no), 'Rejected'));
   }
 
   // ---------- users ----------
-  async function pageUsers() {
-    if (!isAdmin()) return pageDashboard();
-    loading('Users');
-    const { users } = await api('GET', '/api/users');
-    shell('Users', 'Who can sign in, and what they can do', `<button class="btn primary" id="add">${ic('plus')}<span class="new-label">Add user</span></button>`, `
-      <div class="notice info">${ic('info')}<div><b>Admin</b>: everything, approves edits · <b>Manager / Staff</b>: add entries, fill empty fields, request edits · <b>Viewer</b>: look only. People sign in with this Google account.</div></div>
-      <div class="panel"><div class="tbl-wrap"><table><thead><tr><th>Name</th><th>Google account</th><th>Role</th><th>Status</th><th>Notes</th></tr></thead><tbody>
-      ${users.map((u) => `<tr class="click" data-u="${esc(u.email)}"><td class="strong">${esc(u.name)}</td><td>${esc(u.email)}</td><td><span class="pill navy">${esc(u.role || '—')}</span></td><td>${u.active ? '<span class="pill green">Active</span>' : '<span class="pill grey">Off</span>'}</td><td class="muted">${esc(u.notes)}</td></tr>`).join('')}
-      </tbody></table></div></div>`);
-    const edit = (u) => {
+  // ---------- users & roles ----------
+  const LEVEL_TEXT = { none: 'No access', view: 'View', add: 'Add', edit: 'Edit' };
+  const LEVEL_HELP = { none: 'Section is hidden', view: 'Can only look', add: 'New entries, fill empty fields, ask to change saved ones', edit: 'Can also change saved entries (logged)' };
+  const ago = (iso) => {
+    if (!iso) return 'Never';
+    const m = Math.round((Date.now() - new Date(iso)) / 60000);
+    if (m < 1) return 'Just now'; if (m < 60) return `${m} min ago`;
+    const h = Math.round(m / 60); if (h < 24) return `${h} h ago`;
+    return fdate(new Date(iso).toISOString().slice(0, 10));
+  };
+
+  async function pageAccess() {
+    if (!S.user.manageUsers) return route404();
+    loading('Users & Roles');
+    const A = await api('GET', '/api/access');
+    S.accessTab = S.accessTab || 'users';
+    const tab = S.accessTab;
+    const roleName = (id) => A.roles.find((r) => r.id === id)?.name || '—';
+    const summary = (r) => {
+      const parts = A.modules.filter((m) => r.perms[m.key] && r.perms[m.key] !== 'none');
+      if (r.system) return 'Full access to everything';
+      if (!parts.length) return 'No access';
+      const edit = parts.filter((m) => r.perms[m.key] === 'edit').length, add = parts.filter((m) => r.perms[m.key] === 'add').length;
+      return `${parts.length} of ${A.modules.length} sections${add ? ` · adds in ${add}` : ''}${edit ? ` · edits in ${edit}` : ''}`;
+    };
+    const usersHtml = `
+      <div class="panel"><div class="tbl-wrap"><table>
+        <thead><tr><th>Name</th><th>Username</th><th>Role</th><th>Status</th><th>Last sign-in</th></tr></thead><tbody>
+        ${A.users.map((u) => `<tr class="click" data-u="${esc(u.id)}">
+          <td><div class="person"><span class="avatar sm">${esc(initials(u.name))}</span><span class="strong">${esc(u.name)}</span>${u.id === S.user.id ? '<span class="you">You</span>' : ''}</div></td>
+          <td class="muted">${esc(u.username)}</td><td>${esc(u.role)}</td>
+          <td>${u.active ? (u.mustChange ? '<span class="pill amber">Must set password</span>' : '<span class="pill green">Active</span>') : '<span class="pill grey">Turned off</span>'}</td>
+          <td class="muted">${esc(ago(u.lastLogin))}</td></tr>`).join('')}
+        </tbody></table></div></div>`;
+    const rolesHtml = `
+      <div class="role-list">${A.roles.map((r) => `
+        <button class="role-card" data-r="${esc(r.id)}">
+          <div class="role-top"><b>${esc(r.name)}</b>${r.system ? `<span class="pill navy">${ic('lock')}Fixed</span>` : ''}</div>
+          <div class="muted">${esc(summary(r))}</div>
+          <div class="role-meta">${ic('users')}${r.users} ${r.users === 1 ? 'user' : 'users'}${r.approve ? ` <span class="dot"></span> Approves edits` : ''}${r.manageUsers ? ` <span class="dot"></span> Manages users` : ''}</div>
+        </button>`).join('')}</div>`;
+    shell('Users & Roles', 'Who can sign in, and what each role can see and do',
+      exportBtn() + (tab === 'users' ? `<button class="btn primary" id="add">${ic('userPlus')}<span class="new-label">Add user</span></button>`
+        : `<button class="btn primary" id="addr">${ic('plus')}<span class="new-label">New role</span></button>`), `
+      <div class="seg" role="tablist"><button class="${tab === 'users' ? 'on' : ''}" data-tab="users">Users <span>${A.users.length}</span></button><button class="${tab === 'roles' ? 'on' : ''}" data-tab="roles">Roles <span>${A.roles.length}</span></button></div>
+      ${tab === 'users' ? usersHtml : rolesHtml}`);
+    document.querySelectorAll('[data-tab]').forEach((b) => b.onclick = () => { S.accessTab = b.dataset.tab; pageAccess(); });
+    wireExport(() => ({ title: 'Users and Roles', subtitle: `${A.users.length} users · ${A.roles.length} roles`, sections: [
+      { heading: 'Users', columns: ['Name', 'Username', 'Role', 'Status', 'Last sign-in', 'Created by'].map((l) => ({ label: l })),
+        rows: A.users.map((u) => [u.name, u.username, u.role, u.active ? (u.mustChange ? 'Must set password' : 'Active') : 'Turned off', ago(u.lastLogin), u.createdBy === 'setup' ? 'First setup' : u.createdBy]) },
+      { heading: 'Roles', columns: [{ label: 'Role' }, ...A.modules.map((m) => ({ label: m.label })), { label: 'Approves edits' }, { label: 'Manages users' }],
+        rows: A.roles.map((r) => [r.name, ...A.modules.map((m) => LEVEL_TEXT[r.perms[m.key] || 'none']), r.approve ? 'Yes' : 'No', r.manageUsers ? 'Yes' : 'No']) },
+    ] }));
+
+    const editUser = (u) => {
+      const isMe = u && u.id === S.user.id;
       const d = drawer(`
-        <div class="drawer-h"><div><h3>${u ? esc(u.name || u.email) : 'Add user'}</h3><small>Users</small></div><div class="grow"></div><button class="icon-btn" data-close style="color:var(--navy)">${ic('x')}</button></div>
-        <form class="drawer-b" id="uf"><div class="fgroup"><div class="fgrid">
-          <div class="field"><label>Google account (email) <span class="req">*</span></label><input name="email" type="email" value="${esc(u?.email || '')}" ${u ? 'readonly' : ''}></div>
-          <div class="field"><label>Name</label><input name="name" value="${esc(u?.name || '')}"></div>
-          <div class="field"><label>Role <span class="req">*</span></label><select name="role">${['Admin', 'Manager', 'Staff', 'Viewer'].map((r) => `<option ${u?.role === r || (!u && r === 'Staff') ? 'selected' : ''}>${r}</option>`).join('')}</select></div>
-          <div class="field"><label>Access</label><select name="active"><option value="yes" ${u?.active !== false ? 'selected' : ''}>Active</option><option value="no" ${u?.active === false ? 'selected' : ''}>Turned off</option></select></div>
-          <div class="field" style="grid-column:1/-1"><label>Notes</label><input name="notes" value="${esc(u?.notes || '')}"></div>
-        </div></div><div class="notice info">${ic('info')}<div>To also give them access to the Google Sheet itself, run RE Admin → Sync users & access in the sheet.</div></div></form>
-        <div class="drawer-f"><button class="btn" data-close>Cancel</button><button class="btn primary" id="us">${ic('check')}Save</button></div>`);
+        <div class="drawer-h"><div><h3>${u ? esc(u.name) : 'Add user'}</h3><small>${u ? '@' + esc(u.username) : 'They sign in with this username and password'}</small></div><div class="grow"></div><button class="icon-btn" data-close aria-label="Close">${ic('x')}</button></div>
+        <form class="drawer-b" id="uf" novalidate autocomplete="off">
+          <div class="fgroup"><h4>Person</h4><div class="fgrid">
+            <div class="field"><label>Full name <span class="req">*</span></label><input name="name" value="${esc(u?.name || '')}" maxlength="60"></div>
+            <div class="field"><label>Username <span class="req">*</span></label>${u ? `<div class="ro">${esc(u.username)}</div>` : '<input name="username" autocapitalize="none" spellcheck="false" placeholder="e.g. ravi" maxlength="30">'}</div>
+            <div class="field"><label>Role <span class="req">*</span></label>${isMe ? `<div class="ro">${esc(u.role)}</div>` : `<select name="roleId">${A.roles.map((r) => `<option value="${esc(r.id)}" ${(u ? u.roleId === r.id : r.id === 'sales') ? 'selected' : ''}>${esc(r.name)}</option>`).join('')}</select>`}</div>
+            <div class="field"><label>Account</label>${isMe ? '<div class="ro">Active</div>' : `<select name="active"><option value="yes" ${u?.active !== false ? 'selected' : ''}>Active: can sign in</option><option value="no" ${u?.active === false ? 'selected' : ''}>Turned off: cannot sign in</option></select>`}</div>
+          </div></div>
+          <div class="fgroup"><h4>${u ? 'Reset password' : 'Password'}</h4>
+            <div class="field">${pwFieldInline(u ? 'Leave empty to keep the current password' : 'At least 6 characters')}</div>
+            <p class="hint">${u ? 'After a reset they must choose their own password at the next sign-in.' : 'Give this password to the person. They choose their own at the first sign-in.'}</p>
+          </div>
+          ${u ? `<p class="hint">Created ${esc(ago(u.createdAt))}${u.createdBy && u.createdBy !== 'setup' ? ' by ' + esc(u.createdBy) : ''} · last sign-in ${esc(ago(u.lastLogin).toLowerCase())}</p>` : ''}
+        </form>
+        <div class="drawer-f"><div class="grow"></div><button class="btn" data-close>Cancel</button><button class="btn primary" id="us">${ic('check')}${u ? 'Save changes' : 'Create user'}</button></div>`);
+      wirePw();
       d.querySelector('#us').onclick = async () => {
         const fd = Object.fromEntries(new FormData(d.querySelector('#uf')));
-        try { await api('POST', '/api/users', { ...fd, active: fd.active !== 'no' }); toast('User saved'); closeDrawer(); pageUsers(); }
+        const body = { name: fd.name, roleId: fd.roleId, active: fd.active ? fd.active !== 'no' : undefined };
+        if (fd.password) body.password = fd.password;
+        try {
+          if (u) await api('PUT', `/api/access/users/${u.id}`, body);
+          else await api('POST', '/api/access/users', { ...body, username: fd.username, password: fd.password });
+          toast(u ? 'User saved' : `User ${fd.username} created`); closeDrawer(); pageAccess();
+        } catch (e) { toast(e.message, true); }
+      };
+    };
+
+    const editRole = (r) => {
+      const fixed = r?.system;
+      const perms = { ...(r?.perms || {}) };
+      const d = drawer(`
+        <div class="drawer-h"><div><h3>${r ? esc(r.name) : 'New role'}</h3><small>${fixed ? 'The Admin role always has full access' : 'Choose what this role can do in each section'}</small></div><div class="grow"></div><button class="icon-btn" data-close aria-label="Close">${ic('x')}</button></div>
+        <form class="drawer-b" id="rf" novalidate>
+          <div class="fgroup"><div class="field"><label>Role name <span class="req">*</span></label>${fixed ? `<div class="ro">${esc(r.name)}</div>` : `<input name="name" value="${esc(r?.name || '')}" maxlength="40" placeholder="e.g. Sales Executive">`}</div></div>
+          <div class="fgroup"><h4>Access by section</h4>
+            <div class="perm-grid">
+              <div class="perm-head"><span></span>${A.levels.map((l) => `<span title="${esc(LEVEL_HELP[l])}">${LEVEL_TEXT[l]}</span>`).join('')}</div>
+              ${A.modules.map((m) => {
+                const allowed = m.levels || A.levels;
+                const cur = perms[m.key] || 'none';
+                return `<div class="perm-row"><span class="pm">${ic(m.key === 'dashboard' ? 'dash' : m.key)}${esc(m.label)}</span>${A.levels.map((l) => allowed.includes(l)
+                  ? `<label class="radio"><input type="radio" name="p_${m.key}" value="${l}" ${cur === l ? 'checked' : ''} ${fixed ? 'disabled' : ''}><span></span></label>`
+                  : '<span class="na">–</span>').join('')}</div>`;
+              }).join('')}
+            </div>
+            <div class="perm-legend">${A.levels.map((l) => `<div><b>${LEVEL_TEXT[l]}</b> ${esc(LEVEL_HELP[l])}</div>`).join('')}</div>
+          </div>
+          <div class="fgroup"><h4>Control</h4>
+            <label class="check"><input type="checkbox" name="approve" ${r?.approve ? 'checked' : ''} ${fixed ? 'disabled' : ''}><span><b>Approve edit requests</b><small>Can open a saved entry for 30 minutes for the person who asked</small></span></label>
+            <label class="check"><input type="checkbox" name="manageUsers" ${r?.manageUsers ? 'checked' : ''} ${fixed ? 'disabled' : ''}><span><b>Manage users and roles</b><small>Can add people, reset passwords and change roles</small></span></label>
+          </div>
+        </form>
+        <div class="drawer-f">${r && !fixed ? `<button class="btn danger" id="rd">${ic('trash')}Delete role</button>` : ''}<div class="grow"></div><button class="btn" data-close>${fixed ? 'Close' : 'Cancel'}</button>${fixed ? '' : `<button class="btn primary" id="rs">${ic('check')}${r ? 'Save role' : 'Create role'}</button>`}</div>`);
+      const save = d.querySelector('#rs');
+      if (save) save.onclick = async () => {
+        const f = d.querySelector('#rf');
+        const body = { id: r?.id, name: f.name.value, approve: f.approve.checked, manageUsers: f.manageUsers.checked, perms: {} };
+        A.modules.forEach((m) => { body.perms[m.key] = (f.querySelector(`input[name="p_${m.key}"]:checked`) || {}).value || 'none'; });
+        try { await api('POST', '/api/access/roles', body); toast(r ? 'Role saved' : 'Role created'); closeDrawer(); pageAccess(); }
+        catch (e) { toast(e.message, true); }
+      };
+      const del = d.querySelector('#rd');
+      if (del) del.onclick = async () => {
+        if (!window.confirm(`Delete the role "${r.name}"?`)) return;
+        try { await api('DELETE', `/api/access/roles/${r.id}`); toast('Role deleted'); closeDrawer(); pageAccess(); }
         catch (e) { toast(e.message, true); }
       };
     };
-    document.getElementById('add').onclick = () => edit(null);
-    document.querySelectorAll('[data-u]').forEach((tr) => tr.onclick = () => edit(users.find((x) => x.email === tr.dataset.u)));
-  }
 
+    const add = document.getElementById('add'); if (add) add.onclick = () => editUser(null);
+    const addr = document.getElementById('addr'); if (addr) addr.onclick = () => editRole(null);
+    document.querySelectorAll('[data-u]').forEach((tr) => tr.onclick = () => editUser(A.users.find((x) => x.id === tr.dataset.u)));
+    document.querySelectorAll('[data-r]').forEach((b) => b.onclick = () => editRole(A.roles.find((x) => x.id === b.dataset.r)));
+  }
+  const pwFieldInline = (ph) => `<div class="pw"><input name="password" type="password" autocomplete="new-password" placeholder="${esc(ph)}"><button type="button" class="icon-btn pw-eye" aria-label="Show password">${ic('eye')}</button></div>`;
+
+  function route404() {
+    const p = firstPage();
+    if (p && p !== location.hash) { location.hash = p; return; }
+    shell('No access', '', '', `<div class="panel"><div class="empty">Your role has no sections yet. Ask the Admin to give your role access.</div></div>`);
+  }
   // ---------- router & boot ----------
   async function route() {
     closeDrawer();
-    const h = location.hash || '#/dashboard';
+    const h = location.hash || firstPage() || '#/dashboard';
+    const key = h.startsWith('#/s/') ? h.slice(4) : h === '#/ledger' ? 'ledger' : h === '#/access' ? '@users' : h === '#/approvals' ? '@approvals' : 'dashboard';
+    if (!navAllowed(key)) return route404();
     try {
       if (h.startsWith('#/s/')) await pageSheet(h.slice(4));
       else if (h === '#/ledger') await pageLedger();
       else if (h === '#/approvals') await pageApprovals();
-      else if (h === '#/users') await pageUsers();
+      else if (h === '#/access') await pageAccess();
       else await pageDashboard();
     } catch (e) {
       if (e.status === 401) { S.user = null; return renderLogin(); }
+      if (e.mustChange) return renderNewPassword();
       if (S.user) shell('Error', '', '', `<div class="panel"><div class="empty">${esc(e.message)}<br><br><button class="btn" onclick="location.reload()">Try again</button></div></div>`);
     }
   }
@@ -620,7 +865,7 @@
   async function refreshCore() {
     const b = await api('GET', '/api/bootstrap');
     Object.assign(S, { user: b.user, schema: b.schema, lists: b.lists, engines: b.engines, demo: b.demo, showroom: b.showroom });
-    if (S.user.role === 'Admin') {
+    if (S.user.approve) {
       api('GET', '/api/requests').then((r) => { S.pendingCount = r.requests.filter((x) => x.status === 'Pending').length; const n = document.querySelector('a[href="#/approvals"]'); if (n && S.pendingCount && !n.querySelector('.badge')) n.insertAdjacentHTML('beforeend', `<span class="badge">${S.pendingCount}</span>`); }).catch(() => {});
     }
   }
@@ -629,6 +874,7 @@
     try {
       await refreshCore();
     } catch (e) {
+      if (e.mustChange) return renderNewPassword();
       return renderLogin(e.status === 401 ? '' : e.message);
     }
     window.onhashchange = route;

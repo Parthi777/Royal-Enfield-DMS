@@ -1,16 +1,18 @@
 {
   "name": "re-showroom-app",
   "version": "1.0.0",
-  "description": "Royal Enfield showroom web app on top of the RE Showroom Google Sheet",
+  "description": "Royal Enfield showroom web app: logins and roles, entries, edit approvals, ledger, dashboard, Excel and PDF reports",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
     "demo": "DEMO_MODE=true node server.js"
   },
   "dependencies": {
+    "exceljs": "^4.4.0",
     "express": "^4.22.3",
     "google-auth-library": "^9.15.1",
-    "googleapis": "^144.0.0"
+    "googleapis": "^144.0.0",
+    "pdfkit": "^0.15.2"
   },
   "private": true,
   "engines": {
