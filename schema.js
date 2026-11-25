@@ -43,7 +43,7 @@ const SHEETS = {
       { c: 'O', label: 'Alert', type: 'auto', status: true },
       { c: 'P', label: 'Check', type: 'auto', check: true },
     ],
-    list: ['A', 'B', 'C', 'D', 'G', 'I', 'J', 'K', 'O'],
+    list: ['A', 'B', 'C', 'D', 'G', 'I', 'K', 'J', 'O'],
   },
   sales: {
     name: 'Vehicle Sales', title: 'Vehicle Sales', icon: 'receipt', last: 'AL', key: 'B',
@@ -94,7 +94,7 @@ const SHEETS = {
       { c: 'AK', label: 'Booking type', type: 'auto' },
       { c: 'AL', label: 'Check', type: 'auto', check: true },
     ],
-    list: ['A', 'B', 'C', 'E', 'I', 'Q', 'AI', 'AH', 'AJ'],
+    list: ['A', 'B', 'C', 'E', 'I', 'Q', 'AI', 'AJ'],
   },
   service: {
     name: 'Service', title: 'Service', icon: 'wrench', last: 'G', key: 'B',

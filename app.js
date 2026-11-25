@@ -8,8 +8,9 @@
   const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const num = (v) => (v === '' || v === null || v === undefined || isNaN(Number(v)) ? 0 : Number(v));
   const inr = (v, dash = true) => (v === '' || v === null || v === undefined) ? '' : (num(v) === 0 && dash ? '–' : (num(v) < 0 ? '-₹' : '₹') + Math.abs(Math.round(num(v))).toLocaleString('en-IN'));
-  const fdate = (s) => { if (!s || typeof s !== 'string' || !/^\d{4}-\d{2}-\d{2}/.test(s)) return s ?? ''; const [y, m, d] = s.slice(0, 10).split('-'); return `${d}-${m}-${y}`; };
-  const fmonth = (s) => { if (!s) return ''; const d = new Date(s + 'T00:00:00'); return d.toLocaleDateString('en-IN', { month: 'short', year: '2-digit' }); };
+  const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const fdate = (s) => { if (!s || typeof s !== 'string' || !/^\d{4}-\d{2}-\d{2}/.test(s)) return s ?? ''; const [y, m, d] = s.slice(0, 10).split('-'); return `${+d} ${MON[+m - 1]} ${y}`; };
+  const fmonth = (s) => { if (!s) return ''; const [y, m] = s.split('-'); return `${MON[+m - 1]} ${y}`; };
   const todayIso = () => { const d = new Date(Date.now() + (330 + new Date().getTimezoneOffset()) * 60000); return d.toISOString().slice(0, 10); };
   const isWriter = () => ['Admin', 'Manager', 'Staff'].includes(S.user?.role);
   const isAdmin = () => S.user?.role === 'Admin';
@@ -61,6 +62,13 @@
   }
 
   // pill colour from status text
+  function pillText(s) {
+    // sheet statuses come as CAPS or Title Case: show them in sentence case
+    let t = s.toLowerCase().replace(/\s+-\s+/, ' ');
+    t = t.replace(/\bdd\b/g, 'DD').replace(/\bhp\b/g, 'HP').replace(/^ok$/, 'OK');
+    return t.replace(/[a-z]/, (ch) => ch.toUpperCase());
+  }
+  const indianAmounts = (s) => s.replace(/₹([\d,]+)/g, (_, n) => inr(Number(n.replace(/,/g, '')), false));
   function pill(v) {
     const s = String(v || '');
     if (!s) return '';
@@ -74,7 +82,7 @@
     else if (/^AVAILABLE|ON TRACK|FULLY PAID|APPROVED|IN STOCK/.test(u)) c = 'green';
     else if (/ALLOTTED/.test(u)) c = 'teal';
     else if (/SOLD|DELIVERED/.test(u)) c = 'grey';
-    return `<span class="pill ${c}">${esc(s)}</span>`;
+    return `<span class="pill ${c}">${esc(indianAmounts(pillText(s)))}</span>`;
   }
 
   function cellHtml(col, v) {
@@ -141,7 +149,7 @@
           <nav class="nav">${NAV.map(([sec, items]) => `<div class="sec">${sec}</div>` + items.filter((i) => !i[3] || isAdmin()).map(([href, label, icon]) =>
             `<a href="${href}" class="${route.startsWith(href) ? 'on' : ''}">${ic(icon)}<span>${label}</span>${href === '#/approvals' && S.pendingCount ? `<span class="badge">${S.pendingCount}</span>` : ''}</a>`).join('')).join('')}</nav>
           <div class="side-user"><div class="avatar">${esc(initials(S.user.name))}</div>
-            <div class="who"><b>${esc(S.user.name)}</b><small>${esc(S.user.role)} · ${esc(S.user.email)}</small></div>
+            <div class="who"><b>${esc(S.user.name)}</b><small title="${esc(S.user.email)}">${esc(S.user.role)}</small></div>
             <button class="icon-btn" id="logout" title="Sign out">${ic('out')}</button></div>
         </aside>
         <div class="main">
@@ -166,64 +174,106 @@
   async function pageDashboard() {
     loading('Dashboard');
     const d = await api('GET', '/api/dashboard');
-    const tiles = d.today.map((t) => `<div class="card tile"><div class="l">${esc(t.label)}</div><div class="v">${t.money ? inr(t.value) : esc(num(t.value))}</div><div class="s">${esc(t.sub)}</div></div>`).join('');
-    const cards = d.month.map((t) => `<div class="card tile kpi"><div class="l">${esc(t.label)}</div><div class="v">${t.money ? inr(t.value) : esc(num(t.value))}</div><div class="s">${esc(t.sub)}</div></div>`).join('');
-    const maxBank = Math.max(1, ...d.bank.map((b) => b.closing));
-    const maxSold = Math.max(1, ...d.monthly.map((m) => m.sold));
-    const models = d.models.filter((m) => m.available + m.allotted + m.sold + m.waiting > 0);
-    const maxModel = Math.max(1, ...models.map((m) => Math.max(m.available, m.waiting)));
-    const maxExp = Math.max(1, ...d.expenses.map((e) => e.paid));
-    const mixTotal = d.mix.reduce((s, m) => s + m.count, 0) || 1;
-    const bar = (v, max, cls = '') => `<div class="bar ${cls}"><i style="width:${Math.max(0, Math.min(100, (v / max) * 100))}%"></i></div>`;
+    const T = Object.fromEntries(d.today.map((x) => [x.label, num(x.value)]));
+    const M = Object.fromEntries(d.month.map((x) => [x.label, num(x.value)]));
+    const rd = new Date(d.reportDate + 'T00:00:00');
+    const longDate = rd.toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+    const monthName = rd.toLocaleDateString('en-IN', { month: 'long' });
+    const bar = (v, max, cls = '') => `<div class="bar ${cls}"><i style="width:${max > 0 ? Math.max(2, Math.min(100, (v / max) * 100)) : 0}%"></i></div>`;
+    const stat = (label, value, sub = '', money = false) => {
+      const z = num(value) === 0;
+      return `<div class="st"><div class="l">${esc(label)}</div><div class="v ${z ? 'zero' : ''}">${money ? (z ? '₹0' : inr(value)) : num(value)}</div><div class="s">${sub || '&nbsp;'}</div></div>`;
+    };
 
-    shell('Dashboard', `Report date ${fdate(d.reportDate)}`, `<button class="btn" id="refresh">${ic('refresh')}Refresh</button>`, `
-      <div class="section-title"><h3>Today</h3><span>${fdate(d.reportDate)}</span></div>
-      <div class="grid g-6">${tiles}</div>
-      <div class="section-title"><h3>This month</h3></div>
-      <div class="grid g-4">${cards}</div>
+    // stock comes from the live engine list (Available + Allotted = in the showroom)
+    const inStock = S.engines.filter((e) => e.status === 'Available' || e.status === 'Allotted');
+    const allotted = inStock.filter((e) => e.status === 'Allotted');
+    const stockValue = inStock.reduce((s, e) => s + num(e.value), 0);
 
-      <div class="grid g-3-1" style="margin-top:22px">
-        <div class="card"><div class="card-h"><h3>Bank & cash balances</h3><div class="grow"></div><a href="#/ledger" class="btn sm">Open ledger</a></div>
-          <div class="tbl-wrap"><table><thead><tr><th>Account</th><th class="num">Opening</th><th class="num">Received</th><th class="num">Paid</th><th class="num">Closing</th><th style="width:28%"></th></tr></thead><tbody>
-          ${d.bank.map((b) => `<tr><td class="strong">${esc(b.account)}</td><td class="num">${inr(b.opening)}</td><td class="num in">${inr(b.received)}</td><td class="num out">${inr(b.paid)}</td><td class="num"><b>${inr(b.closing)}</b></td><td>${bar(b.closing, maxBank)}</td></tr>`).join('')}
-          <tr><td><b>Total</b></td><td class="num"><b>${inr(d.bankTotal.opening)}</b></td><td class="num"><b>${inr(d.bankTotal.received)}</b></td><td class="num"><b>${inr(d.bankTotal.paid)}</b></td><td class="num"><b>${inr(d.bankTotal.closing)}</b></td><td></td></tr>
-          </tbody></table></div></div>
-        <div class="card"><div class="card-h"><h3>Sales mix</h3><small>this month</small></div><div class="card-b">
-          ${d.mix.map((m) => `<div class="barcell" style="margin-bottom:12px"><span style="width:44px" class="strong">${esc(m.mode)}</span>${bar(m.count, mixTotal, m.mode === 'HP' ? 'navy' : '')}<b>${m.count}</b></div>`).join('')}
-          ${d.financiers.length ? `<div class="muted" style="font-size:12px;margin:14px 0 6px;font-weight:600">FINANCIERS</div>` + d.financiers.map((f) => `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #F0F2F5"><span>${esc(f.name)} <span class="muted">· ${f.count}</span></span><b>${inr(f.dd)}</b></div>`).join('') : '<div class="muted">No HP sales this month.</div>'}
-        </div></div>
+    const open = num(T['OPENING BALANCE']), close = num(T['CLOSING BALANCE']);
+    const change = close - open;
+    const ddPending = d.balances.reduce((s, b) => s + b.dd, 0);
+    const owes = d.balances.filter((b) => b.owes > 0);
+    const dds = d.balances.filter((b) => b.dd > 0);
+
+    // last 6 months up to the report month
+    const ym = d.reportDate.slice(0, 7);
+    const months = d.monthly.filter((m) => m.month.slice(0, 7) <= ym).slice(-6);
+    const maxSold = Math.max(0, ...months.map((m) => m.sold));
+    const models = d.models.filter((m) => m.available + m.allotted + m.waiting > 0);
+    const maxModel = Math.max(0, ...models.map((m) => Math.max(m.available + m.allotted, m.waiting)));
+    const maxExp = Math.max(0, ...d.expenses.map((e) => e.paid));
+    const old = d.ageing.slice(2).reduce((s, a) => s + a.bikes, 0);
+
+    shell('Dashboard', esc(longDate), `<button class="btn" id="refresh">${ic('refresh')}Refresh</button>`, `
+      <section class="hero">
+        <div>
+          <div class="lbl">Cash and bank balance</div>
+          <div class="big">${inr(close, false)}</div>
+          <div class="chg">${change === 0 ? 'No change today' : `<b class="${change < 0 ? 'neg' : ''}">${change > 0 ? '+' : '−'}${inr(Math.abs(change), false)}</b> today`}</div>
+        </div>
+        <div class="accts">${d.bank.map((b) => `<div class="acct"><span>${esc(b.account)}</span><b>${inr(b.closing, false)}</b></div>`).join('')}</div>
+      </section>
+
+      <div class="section-h"><h3>Today</h3></div>
+      <div class="panel strip" style="--n:6">
+        ${stat('Bikes sold', T['SALES TODAY'], `HP ${num(T['HP SALES'])} · Cash ${num(T['CASH SALES'])}`)}
+        ${stat('Sales value', T['SALES VALUE (ON-ROAD)'], 'on-road price', true)}
+        ${stat('New bookings', T['BOOKINGS TODAY'])}
+        ${stat('Service billed', T['SERVICE AMOUNT'], '', true)}
+        ${stat('Cash deposited', T['BANK DEPOSIT'], 'into bank', true)}
+        ${stat('Bank transfers', T['BANK TRANSFER'], 'between accounts', true)}
       </div>
 
-      <div class="grid g-2" style="margin-top:14px">
-        <div class="card"><div class="card-h"><h3>Overdue bookings</h3><small>call today</small></div>
-          ${d.overdue.length ? `<div class="tbl-wrap"><table><thead><tr><th>Customer</th><th>Model</th><th>Commitment</th><th class="num">Late</th><th class="num">Advance</th></tr></thead><tbody>
-          ${d.overdue.map((o) => `<tr><td><div class="strong">${esc(o.customer)}</div><div class="muted">${esc(o.mobile)}</div></td><td>${esc(o.model)}</td><td class="date">${fdate(o.commitment)}</td><td class="num"><span class="pill red">${o.late} days</span></td><td class="num">${inr(o.advance)}</td></tr>`).join('')}
-          </tbody></table></div>` : '<div class="empty">No overdue bookings 🎉</div>'}</div>
-        <div class="card"><div class="card-h"><h3>Customer balance & DD pending</h3><small>follow up</small></div>
-          ${d.balances.length ? `<div class="tbl-wrap"><table><thead><tr><th>Customer</th><th>Model</th><th class="num">Owes</th><th class="num">DD pending</th></tr></thead><tbody>
-          ${d.balances.map((b) => `<tr><td><div class="strong">${esc(b.customer)}</div><div class="muted">${esc(b.mobile)} · ${fdate(b.date)}</div></td><td>${esc(b.model)}</td><td class="num">${b.owes > 0 ? `<b class="out">${inr(b.owes)}</b>` : '–'}</td><td class="num">${b.dd > 0 ? `<span class="pill amber">${inr(b.dd)}</span>` : '–'}</td></tr>`).join('')}
-          </tbody></table></div>` : '<div class="empty">Everything collected.</div>'}</div>
+      <div class="section-h"><h3>${esc(monthName)}</h3><span>month to date</span></div>
+      <div class="panel strip" style="--n:6">
+        ${stat('Bikes sold', M['VEHICLES SOLD · MONTH'])}
+        ${stat('Collections', M['CUSTOMER COLLECTIONS · MONTH'], 'from customers', true)}
+        ${stat('Finance DD received', M['DD RECEIVED · MONTH'], '', true)}
+        ${stat('Service revenue', M['SERVICE REVENUE · MONTH'], '', true)}
+        ${stat('Expenses paid', M['EXPENSES PAID · MONTH'], '', true)}
+        ${stat('Open bookings', M['OPEN BOOKINGS'], d.overdue.length ? `<span class="bad">${d.overdue.length} overdue</span>` : 'none overdue')}
       </div>
 
-      <div class="grid g-2" style="margin-top:14px">
-        <div class="card"><div class="card-h"><h3>Stock vs demand by model</h3><small>bikes available vs customers waiting</small></div>
-          ${models.length ? `<div class="tbl-wrap"><table><thead><tr><th>Model</th><th class="num">Available</th><th class="num">Allotted</th><th class="num">Sold (month)</th><th class="num">Waiting</th><th style="width:30%"></th></tr></thead><tbody>
-          ${models.map((m) => `<tr><td class="strong">${esc(m.model)}</td><td class="num">${m.available}</td><td class="num">${m.allotted}</td><td class="num">${m.sold}</td><td class="num">${m.waiting > m.available ? `<span class="pill red">${m.waiting}</span>` : m.waiting}</td>
-            <td><div style="display:grid;gap:4px">${bar(m.available, maxModel)}${m.waiting ? bar(m.waiting, maxModel, 'amber') : ''}</div></td></tr>`).join('')}
-          </tbody></table></div><div class="card-b muted" style="font-size:12px">Teal = available bikes · Amber = customers waiting (not allotted). Red = order stock.</div>` : '<div class="empty">No stock or bookings yet.</div>'}</div>
-        <div class="card"><div class="card-h"><h3>Monthly trend</h3><small>${new Date(d.reportDate).getFullYear()}</small></div>
-          <div class="tbl-wrap"><table><thead><tr><th>Month</th><th class="num">Sold</th><th class="num">Bookings</th><th class="num">Collections</th><th class="num">Service</th><th style="width:24%"></th></tr></thead><tbody>
-          ${d.monthly.map((m) => `<tr><td class="strong">${fmonth(m.month)}</td><td class="num">${m.sold || '–'}</td><td class="num">${m.bookings || '–'}</td><td class="num">${inr(m.collections)}</td><td class="num">${inr(m.service)}</td><td>${m.sold ? bar(m.sold, maxSold) : ''}</td></tr>`).join('')}
-          </tbody></table></div></div>
-      </div>
+      <div class="cols">
+        <div class="stack">
+          <div class="panel"><div class="panel-h"><h3>Follow up</h3><div class="grow"></div><small>${d.overdue.length + owes.length + dds.length || 'nothing'} pending</small></div><div class="panel-b">
+            <div class="group-l">Overdue bookings: call the customer</div>
+            ${d.overdue.length ? `<ul class="rows">${d.overdue.map((o) => `<li><div class="who"><b>${esc(o.customer)}</b><small>${esc(o.model)} · ${esc(o.mobile)}</small></div><div class="amt"><span class="pill red">${o.late} ${o.late === 1 ? 'day' : 'days'} late</span><small>promised ${fdate(o.commitment)}</small></div></li>`).join('')}</ul>` : '<div class="empty-line">No overdue bookings.</div>'}
+            <div class="group-l">Customer balance due · ${inr(M['CUSTOMER BALANCE DUE'], false)}</div>
+            ${owes.length ? `<ul class="rows">${owes.map((b) => `<li><div class="who"><b>${esc(b.customer)}</b><small>${esc(b.model)} · ${esc(b.mobile)}</small></div><div class="amt"><b class="out">${inr(b.owes, false)}</b><small>sold ${fdate(b.date)}</small></div></li>`).join('')}</ul>` : '<div class="empty-line">Every customer has paid in full.</div>'}
+            <div class="group-l">Finance DD pending · ${inr(ddPending, false)}</div>
+            ${dds.length ? `<ul class="rows">${dds.map((b) => `<li><div class="who"><b>${esc(b.customer)}</b><small>${esc(b.model)} · ${esc(b.mobile)}</small></div><div class="amt"><b class="nowrap" style="color:var(--amber-d)">${inr(b.dd, false)}</b><small>sold ${fdate(b.date)}</small></div></li>`).join('')}</ul>` : '<div class="empty-line">No DD pending.</div>'}
+          </div></div>
 
-      <div class="grid g-2" style="margin-top:14px">
-        <div class="card"><div class="card-h"><h3>Expenses by category</h3><small>this month</small></div><div class="card-b">
-          ${d.expenses.length ? d.expenses.map((e) => `<div class="barcell" style="margin-bottom:10px"><span style="width:160px">${esc(e.category)}</span>${bar(e.paid, maxExp, 'navy')}<b style="min-width:80px;text-align:right">${inr(e.paid)}</b></div>`).join('') : '<div class="muted">No expenses this month.</div>'}
-        </div></div>
-        <div class="card"><div class="card-h"><h3>Stock ageing</h3><small>available bikes</small></div><div class="card-b">
-          ${d.ageing.map((a, i) => `<div class="barcell" style="margin-bottom:10px"><span style="width:110px">${esc(a.label)}</span>${bar(a.bikes, Math.max(1, ...d.ageing.map((x) => x.bikes)), i < 2 ? '' : i === 2 ? 'amber' : 'red')}<b style="min-width:30px;text-align:right">${a.bikes}</b></div>`).join('')}
-        </div></div>
+          <div class="panel"><div class="panel-h"><h3>Bikes sold</h3><small>last 6 months</small></div><div class="panel-b">
+            <ul class="rows">${months.map((m) => `<li><div style="width:72px" class="${m.sold ? '' : 'muted'}">${fmonth(m.month)}</div><div class="barline">${m.sold ? bar(m.sold, maxSold) : ''}</div><div class="amt" style="width:64px">${m.sold ? `<b>${m.sold}</b>` : '<span class="muted">–</span>'}</div><div class="amt muted" style="width:104px">${m.collections ? inr(m.collections, false) : ''}</div></li>`).join('')}</ul>
+            <div class="muted" style="font-size:12.5px;margin-top:6px">Right column: money collected from customers that month.</div>
+          </div></div>
+        </div>
+
+        <div class="stack">
+          <div class="panel"><div class="panel-h"><h3>Stock in showroom</h3><div class="grow"></div><a href="#/s/stock">Open stock</a></div>
+            <div class="strip s3" style="--n:3;border-bottom:1px solid var(--line-2)">
+              ${stat('Bikes', inStock.length, `${allotted.length} allotted to bookings`)}
+              ${stat('Stock value', stockValue, 'purchase value', true)}
+              ${stat('Over 60 days', old, old ? '<span class="warn">sell these first</span>' : 'none ageing')}
+            </div>
+            <div class="panel-b" style="padding-top:8px">
+            ${models.length ? `<ul class="rows">${models.map((m) => `<li><div class="who"><b>${esc(m.model)}</b><small>${m.available + m.allotted} in stock${m.allotted ? `, ${m.allotted} allotted` : ''}${m.waiting ? ` · <span style="color:${m.waiting > m.available ? 'var(--red-d)' : 'var(--amber-d)'}">${m.waiting} waiting</span>` : ''}</small></div>
+              <div class="barline" style="display:grid;gap:4px">${bar(m.available + m.allotted, maxModel)}${m.waiting ? bar(m.waiting, maxModel, m.waiting > m.available ? 'red' : 'amber') : ''}</div></li>`).join('')}</ul>
+              <div class="muted" style="font-size:12.5px;margin-top:8px">Teal is stock, amber is customers waiting for a bike. Red means order more.</div>` : '<div class="empty-line">No bikes in stock and nobody waiting.</div>'}
+          </div></div>
+
+          <div class="panel"><div class="panel-h"><h3>Expenses</h3><small>${esc(monthName)}</small></div><div class="panel-b">
+            ${d.expenses.length ? `<ul class="rows">${d.expenses.map((e) => `<li><div class="who"><b>${esc(e.category)}</b></div><div class="barline">${bar(e.paid, maxExp, 'navy')}</div><div class="amt" style="width:90px">${inr(e.paid, false)}</div></li>`).join('')}</ul>` : '<div class="empty-line">No expenses this month.</div>'}
+          </div></div>
+
+          <div class="panel"><div class="panel-h"><h3>Sales mix</h3><small>${esc(monthName)}</small></div><div class="panel-b">
+            <ul class="rows">${d.mix.map((m) => `<li><div class="who"><b>${esc(m.mode === 'HP' ? 'Finance (HP)' : m.mode)}</b></div><div class="amt"><b>${m.count}</b> <span class="muted">${m.count === 1 ? 'bike' : 'bikes'}</span></div></li>`).join('')}
+            ${d.financiers.map((f) => `<li><div class="who"><small>${esc(f.name)}</small></div><div class="amt"><small style="display:inline">${f.count} · DD ${inr(f.dd, false)}</small></div></li>`).join('')}</ul>
+          </div></div>
+        </div>
       </div>`);
     document.getElementById('refresh').onclick = () => pageDashboard();
   }
@@ -257,7 +307,9 @@
     const rows = res.rows.filter(f[2]).filter((r) => !qv || Object.values(r).some((v) => String(v).toLowerCase().includes(qv)))
       .sort((a, b) => b._row - a._row);
     const pend = new Set(res.pending), appr = new Map(res.approved.map((a) => [a.row, a.minutes]));
-    const cols = sh.list.map((c) => colOf(key, c));
+    const phoneCol = sh.cols.find((c) => c.type === 'phone');
+    const cols = sh.list.filter((c) => !phoneCol || c !== phoneCol.c).map((c) => colOf(key, c));
+    const nameCell = (c, r) => `<span class="strong">${cellHtml(c, r[c.c])}</span>${flag(r)}${phoneCol && c.c === 'B' && r[phoneCol.c] ? `<span class="sub">${esc(r[phoneCol.c])}</span>` : ''}`;
     const flag = (r) => (appr.has(r._row) ? `<span class="row-flag in">${ic('unlock')}open ${appr.get(r._row)}m</span>` : pend.has(r._row) ? `<span class="row-flag" style="color:var(--amber-d)">${ic('clock')}edit requested</span>` : '');
     const mobTitle = { stock: (r) => `${r.B} · ${r.E}`, bookings: (r) => r.B, sales: (r) => r.B, service: (r) => r.B, expenses: (r) => r.B, bank: (r) => r.C };
     const mobPill = { stock: 'H', bookings: 'K', sales: 'AJ', service: 'G', expenses: 'I', bank: 'H' };
@@ -275,12 +327,12 @@
         <input class="search" id="q" placeholder="Search name, mobile, engine…" value="${esc(S.q[key] || '')}">
         <div class="chips">${fl.map(([k, label, fn]) => `<button class="chip ${k === f[0] ? 'on' : ''}" data-f="${k}">${label}<span class="n">${count(fn)}</span></button>`).join('')}</div>
       </div>
-      <div class="card desk-table">${rows.length ? `<div class="tbl-wrap"><table><thead><tr>${cols.map((c) => `<th class="${c.type === 'money' || c.money ? 'num' : ''}">${esc(c.label)}</th>`).join('')}</tr></thead><tbody>
-        ${rows.map((r) => `<tr class="click" data-row="${r._row}">${cols.map((c, i) => `<td class="${c.type === 'money' || c.money ? 'num' : c.type === 'date' ? 'date' : ''}">${i === 1 ? `<span class="strong">${cellHtml(c, r[c.c])}</span>${flag(r)}` : cellHtml(c, r[c.c])}</td>`).join('')}</tr>`).join('')}
+      <div class="panel desk-table">${rows.length ? `<div class="tbl-wrap"><table><thead><tr>${cols.map((c) => `<th class="${c.type === 'money' || c.money ? 'num' : ''}">${esc(c.label)}</th>`).join('')}</tr></thead><tbody>
+        ${rows.map((r) => `<tr class="click" data-row="${r._row}">${cols.map((c, i) => `<td class="${c.type === 'money' || c.money ? 'num' : c.type === 'date' ? 'date' : i === 1 ? 'wrap' : ''}">${i === 1 ? nameCell(c, r) : cellHtml(c, r[c.c])}</td>`).join('')}</tr>`).join('')}
         </tbody></table></div>` : `<div class="empty">Nothing here yet.${isWriter() ? ' Use the button above to add the first entry.' : ''}</div>`}</div>
       <div class="mob-cards">${rows.map((r) => `<div class="mcard" data-row="${r._row}"><div class="t"><b>${esc(mobTitle[key](r))}</b>${pill(r[mobPill[key]])}</div>
         <div class="m">${mobMeta[key](r).filter(Boolean).map((x) => `<span>${esc(x)}</span>`).join('')}${flag(r)}</div></div>`).join('') || '<div class="empty">Nothing here yet.</div>'}</div>`;
-    const sub = key === 'bookings' ? 'Sold bookings move to the Delivered filter automatically' : `${res.rows.length} entries`;
+    const sub = key === 'bookings' ? 'Sold bookings move to Delivered automatically' : `${res.rows.length} entries`;
     shell(sh.title, sub, isWriter() ? `<button class="btn primary" id="new">${ic('plus')}<span class="new-label">${NEW_LABEL[key]}</span></button>` : '', body);
     const q = document.getElementById('q');
     q.oninput = () => { S.q[key] = q.value; const pos = q.selectionStart; renderSheet(key); const n = document.getElementById('q'); n.focus(); n.setSelectionRange(pos, pos); };
@@ -479,15 +531,15 @@
     const total = L.accounts.reduce((s, x) => s + x.closing, 0);
     shell('Bank Ledger', 'Every payment with an account posts here automatically', '', `
       ${L.unposted > 0 ? `<div class="notice warn">${ic('info')}<div><b>${inr(L.unposted)}</b> received without an account selected. Open the entry and pick "Received in".</div></div>` : ''}
-      <div class="card" style="margin-bottom:16px"><div class="tbl-wrap"><table><thead><tr><th>Account</th><th class="num">Opening</th><th class="num">Received</th><th class="num">Paid</th><th class="num">Closing</th></tr></thead><tbody>
-        ${L.accounts.map((x) => `<tr class="click" data-acc="${esc(x.account)}"><td class="strong">${esc(x.account)}</td><td class="num">${inr(x.opening)}</td><td class="num in">${inr(x.received)}</td><td class="num out">${inr(x.paid)}</td><td class="num"><b>${inr(x.closing)}</b></td></tr>`).join('')}
-        <tr><td><b>Total cash + bank</b></td><td></td><td></td><td></td><td class="num"><b>${inr(total)}</b></td></tr>
+      <div class="panel" style="margin-bottom:16px"><div class="tbl-wrap"><table><thead><tr><th>Account</th><th class="num hide-m">Opening</th><th class="num hide-m">Received</th><th class="num hide-m">Paid</th><th class="num">Closing</th></tr></thead><tbody>
+        ${L.accounts.map((x) => `<tr class="click" data-acc="${esc(x.account)}"><td class="strong">${esc(x.account)}</td><td class="num hide-m">${inr(x.opening)}</td><td class="num in hide-m">${inr(x.received)}</td><td class="num out hide-m">${inr(x.paid)}</td><td class="num"><b>${inr(x.closing)}</b></td></tr>`).join('')}
+        <tr><td><b>Total cash and bank</b></td><td class="hide-m"></td><td class="hide-m"></td><td class="hide-m"></td><td class="num"><b>${inr(total)}</b></td></tr>
       </tbody></table></div></div>
       <div class="tabs">${L.accounts.map((x) => `<button class="chip ${x.account === S.ledgerAcc ? 'on' : ''}" data-acc="${esc(x.account)}">${esc(x.account)}</button>`).join('')}</div>
-      <div class="stat-row"><div class="stat"><small>Opening</small><b>${inr(a.opening, false)}</b></div><div class="stat"><small>Received</small><b class="in">${inr(a.received, false)}</b></div><div class="stat"><small>Paid</small><b class="out">${inr(a.paid, false)}</b></div><div class="stat"><small>Closing</small><b>${inr(a.closing, false)}</b></div></div>
-      <div class="card">${a.lines.length ? `<div class="tbl-wrap"><table><thead><tr><th>Date</th><th>Particulars</th><th>From</th><th class="num">In</th><th class="num">Out</th><th class="num">Balance</th></tr></thead><tbody>
-        ${a.lines.slice().reverse().map((l) => `<tr><td class="date">${fdate(l.date)}</td><td>${esc(l.text)}</td><td class="muted">${esc(l.from)}</td><td class="num in">${l.in ? inr(l.in) : ''}</td><td class="num out">${l.out ? inr(l.out) : ''}</td><td class="num"><b>${inr(l.balance, false)}</b></td></tr>`).join('')}
-        <tr><td></td><td class="muted">Opening balance</td><td></td><td></td><td></td><td class="num">${inr(a.opening, false)}</td></tr>
+      <div class="panel strip stat-row" style="--n:4"><div class="st"><div class="l">Opening</div><div class="v">${inr(a.opening, false)}</div></div><div class="st"><div class="l">Received</div><div class="v in">${inr(a.received, false)}</div></div><div class="st"><div class="l">Paid</div><div class="v out">${inr(a.paid, false)}</div></div><div class="st"><div class="l">Closing</div><div class="v">${inr(a.closing, false)}</div></div></div>
+      <div class="panel">${a.lines.length ? `<div class="tbl-wrap"><table><thead><tr><th>Date</th><th>Particulars</th><th class="hide-m">From</th><th class="num">In / out</th><th class="num hide-m">Balance</th></tr></thead><tbody>
+        ${a.lines.slice().reverse().map((l) => `<tr><td class="date">${fdate(l.date)}</td><td class="wrap">${esc(l.text)}<span class="sub show-m">${esc(l.from)}</span></td><td class="muted hide-m">${esc(l.from)}</td><td class="num">${l.in ? `<span class="in">+${inr(l.in, false)}</span>` : `<span class="out">−${inr(l.out, false)}</span>`}</td><td class="num hide-m"><b>${inr(l.balance, false)}</b></td></tr>`).join('')}
+        <tr><td></td><td class="muted">Opening balance</td><td class="hide-m"></td><td class="num">${inr(a.opening, false)}</td><td class="hide-m"></td></tr>
       </tbody></table></div>` : '<div class="empty">No entries for this account yet.</div>'}</div>`);
     document.querySelectorAll('[data-acc]').forEach((b) => b.onclick = () => { S.ledgerAcc = b.dataset.acc; pageLedger(); });
   }
@@ -508,8 +560,8 @@
       <td class="num">${isAdmin() && r.status === 'Pending' ? `<button class="btn sm primary" data-ok="${r.id}">Approve</button> <button class="btn sm danger" data-no="${r.id}">Reject</button>` : ''}</td></tr>`;
     const table = (list, empty) => list.length ? `<div class="tbl-wrap"><table><thead><tr><th>When</th><th>Requested by</th><th>Entry</th><th>Reason</th><th>Status</th><th></th></tr></thead><tbody>${list.map(row).join('')}</tbody></table></div>` : `<div class="empty">${empty}</div>`;
     shell('Edit Requests', isAdmin() ? 'Approve to open that entry for 30 minutes, only for the person who asked' : 'Your requests to change saved entries', '', `
-      ${isAdmin() ? `<div class="card" style="margin-bottom:16px"><div class="card-h"><h3>Waiting for you</h3><small>${pend.length}</small></div>${table(pend, 'No pending requests.')}</div>` : ''}
-      <div class="card"><div class="card-h"><h3>${isAdmin() ? 'History' : 'My requests'}</h3></div>${table(isAdmin() ? requests.filter((r) => r.status !== 'Pending') : requests, 'No requests yet. Open a saved entry and use "Request edit".')}</div>`);
+      ${isAdmin() ? `<div class="panel" style="margin-bottom:16px"><div class="panel-h"><h3>Waiting for you</h3><small>${pend.length}</small></div>${table(pend, 'No pending requests.')}</div>` : ''}
+      <div class="panel"><div class="panel-h"><h3>${isAdmin() ? 'History' : 'My requests'}</h3></div>${table(isAdmin() ? requests.filter((r) => r.status !== 'Pending') : requests, 'No requests yet. Open a saved entry and use "Request edit".')}</div>`);
     const decide = async (id, status) => {
       try { await api('POST', `/api/requests/${id}`, { status }); toast(status === 'Approved' ? 'Approved: entry open for 30 minutes' : 'Request rejected'); pageApprovals(); }
       catch (e) { toast(e.message, true); }
@@ -525,7 +577,7 @@
     const { users } = await api('GET', '/api/users');
     shell('Users', 'Who can sign in, and what they can do', `<button class="btn primary" id="add">${ic('plus')}<span class="new-label">Add user</span></button>`, `
       <div class="notice info">${ic('info')}<div><b>Admin</b>: everything, approves edits · <b>Manager / Staff</b>: add entries, fill empty fields, request edits · <b>Viewer</b>: look only. People sign in with this Google account.</div></div>
-      <div class="card"><div class="tbl-wrap"><table><thead><tr><th>Name</th><th>Google account</th><th>Role</th><th>Status</th><th>Notes</th></tr></thead><tbody>
+      <div class="panel"><div class="tbl-wrap"><table><thead><tr><th>Name</th><th>Google account</th><th>Role</th><th>Status</th><th>Notes</th></tr></thead><tbody>
       ${users.map((u) => `<tr class="click" data-u="${esc(u.email)}"><td class="strong">${esc(u.name)}</td><td>${esc(u.email)}</td><td><span class="pill navy">${esc(u.role || '—')}</span></td><td>${u.active ? '<span class="pill green">Active</span>' : '<span class="pill grey">Off</span>'}</td><td class="muted">${esc(u.notes)}</td></tr>`).join('')}
       </tbody></table></div></div>`);
     const edit = (u) => {
@@ -561,7 +613,7 @@
       else await pageDashboard();
     } catch (e) {
       if (e.status === 401) { S.user = null; return renderLogin(); }
-      if (S.user) shell('Error', '', '', `<div class="card"><div class="empty">${esc(e.message)}<br><br><button class="btn" onclick="location.reload()">Try again</button></div></div>`);
+      if (S.user) shell('Error', '', '', `<div class="panel"><div class="empty">${esc(e.message)}<br><br><button class="btn" onclick="location.reload()">Try again</button></div></div>`);
     }
   }
 
