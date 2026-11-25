@@ -1,3 +1,4 @@
+const fs = require('fs');
 // RE Showroom web app: username/password sign-in, roles with per-section access, data in the Google Sheet.
 const express = require('express');
 const crypto = require('crypto');
@@ -171,10 +172,18 @@ app.delete('/api/access/roles/:id', sameOrigin, admin, json((req) => { accounts.
 
 // ---------- static UI ----------
 const PUBLIC = { '/app.js': 'app.js', '/icons.js': 'icons.js', '/style.css': 'style.css' };   // only these files are served
-app.get(Object.keys(PUBLIC), (req, res) => res.sendFile(path.join(__dirname, PUBLIC[req.path]), { maxAge: '1h' }));
+// Each deploy gets its own version tag, so browsers never mix an old script with a new page.
+const BUILD = (process.env.RAILWAY_GIT_COMMIT_SHA || String(Date.now())).slice(0, 12);
+const INDEX = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8')
+  .replace(/(href|src)="\/(app\.js|icons\.js|style\.css)"/g, (m, attr, f) => `${attr}="/${f}?v=${BUILD}"`);
+app.get(Object.keys(PUBLIC), (req, res) => {
+  const fresh = req.query.v === BUILD;   // versioned links can be cached; anything else is checked every time
+  res.sendFile(path.join(__dirname, PUBLIC[req.path]), fresh ? { maxAge: '30d', immutable: true } : { maxAge: 0, headers: { 'Cache-Control': 'no-cache' } });
+});
 app.get('*', (req, res) => {
   if (req.path.startsWith('/api/')) return res.status(404).json({ error: 'Not found' });
-  res.sendFile(path.join(__dirname, 'index.html'));
+  res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+  res.type('html').send(INDEX);
 });
 
 app.use((err, req, res, next) => {
