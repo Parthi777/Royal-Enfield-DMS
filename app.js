@@ -11,7 +11,8 @@
   const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   const fdate = (s) => { if (!s || typeof s !== 'string' || !/^\d{4}-\d{2}-\d{2}/.test(s)) return s ?? ''; const [y, m, d] = s.slice(0, 10).split('-'); return `${+d} ${MON[+m - 1]} ${y}`; };
   const fmonth = (s) => { if (!s) return ''; const [y, m] = s.split('-'); return `${MON[+m - 1]} ${y}`; };
-  const todayIso = () => { const d = new Date(Date.now() + (330 + new Date().getTimezoneOffset()) * 60000); return d.toISOString().slice(0, 10); };
+  // today's date in India (UTC + 5:30), whatever time zone the device is set to
+  const todayIso = () => new Date(Date.now() + 330 * 60000).toISOString().slice(0, 10);
   const RANK = { none: 0, view: 1, add: 2, edit: 3 };
   const canDo = (k, l) => RANK[S.user?.perms?.[k] || 'none'] >= RANK[l];
   const initials = (n) => String(n || '?').split(/[\s@.]+/).filter(Boolean).slice(0, 2).map((x) => x[0].toUpperCase()).join('');
@@ -75,10 +76,11 @@
 
   // ---------- sign in / first setup / new password ----------
   function authCard(inner) {
-    $app.innerHTML = `<div class="login"><div class="login-side"><div class="login-logo"><img src="/brand/logo.png" alt="${esc(S.showroom || 'Pradhanaa Motors LLP')} logo"></div>
+    $app.innerHTML = `<div class="login"><header class="login-side"><div class="login-logo"><img src="/brand/logo.png" alt="${esc(S.showroom || 'Pradhanaa Motors LLP')} logo"></div>
       <div><div class="login-brand">${esc(S.showroom || 'Pradhanaa Motors LLP')}</div>
-      <p>Stock, bookings, sales, service and accounts for the showroom, in one place.</p></div></div>
-      <div class="login-main"><div class="login-card">${inner}</div></div></div>`;
+      <p>Stock, bookings, sales, service and accounts for the showroom, in one place.</p></div></header>
+      <main class="login-main"><div class="login-card">${inner}</div></main></div>`;
+    linkLabels($app);
   }
   const pwField = (name, label, auto) => `<div class="field"><label for="${name}">${label}</label><div class="pw"><input id="${name}" name="${name}" type="password" autocomplete="${auto}" required><button type="button" class="icon-btn pw-eye" aria-label="Show password">${ic('eye')}</button></div></div>`;
   function wirePw() {
@@ -156,13 +158,15 @@
       <div style="height:12px"></div>${pwField('next', 'New password (at least 6 characters)', 'new-password')}
       <div class="acts"><button type="button" class="btn" id="c">Cancel</button><button class="btn primary" type="submit">Save password</button></div></form>`;
     document.body.appendChild(m);
+    const close = () => { m.remove(); m._release?.(); };
+    asDialog(m, m.querySelector('.box'), close);
     wirePw();
     m.querySelector('#current').focus();
-    m.querySelector('#c').onclick = () => m.remove();
-    m.querySelector('.scrim').onclick = () => m.remove();
+    m.querySelector('#c').onclick = () => close();
+    m.querySelector('.scrim').onclick = () => close();
     m.querySelector('#cp').onsubmit = async (e) => {
       e.preventDefault();
-      try { await api('POST', '/api/auth/password', Object.fromEntries(new FormData(e.target))); m.remove(); toast('Password changed'); }
+      try { await api('POST', '/api/auth/password', Object.fromEntries(new FormData(e.target))); close(); toast('Password changed'); }
       catch (err) { toast(err.message, true); }
     };
   }
@@ -184,12 +188,12 @@
     $app.innerHTML = `
       <div class="shell">
         <aside class="side" id="side">
-          <div class="side-brand"><img src="/brand/logo.png" alt=""><div><b>${esc(S.showroom)}</b><span>Royal Enfield dealer</span></div></div>
+          <div class="side-brand"><img src="/brand/logo-160.png" alt="" width="64" height="64"><div><b>${esc(S.showroom)}</b><span>Royal Enfield dealer</span></div></div>
           <nav class="nav">${NAV.map(([sec, items]) => { const ok = items.filter((i) => navAllowed(i[3])); return ok.length ? (sec ? `<div class="sec">${sec}</div>` : '') + ok.map(([href, label, icon]) =>
             `<a href="${href}" class="${route.startsWith(href) ? 'on' : ''}">${ic(icon)}<span>${label}</span>${href === '#/approvals' && S.pendingCount ? `<span class="badge">${S.pendingCount}</span>` : ''}</a>`).join('') : ''; }).join('')}</nav>
           ${S.demo ? '<div class="side-note">Demo data: entries are not saved to the Google Sheet.</div>' : ''}
         </aside>
-        <div class="main">
+        <main class="main">
           <header class="topbar">
             <button class="icon-btn menu-btn" id="menu" aria-label="Menu">${ic('menu')}</button>
             <div class="grow"></div>
@@ -199,21 +203,26 @@
                 <div class="menu-h">Signed in as <b>${esc(S.user.username)}</b></div>
                 <button id="cpw">${ic('key')}Change password</button>
                 <button id="logout">${ic('out')}Sign out</button>
+                <button id="logoutall">${ic('out')}Sign out of all devices</button>
               </div>
             </div>
           </header>
           <div class="page-h">
-            <div><h2>${esc(title)}</h2>${sub ? `<div class="sub">${sub}</div>` : ''}</div>
+            <div><h1>${esc(title)}</h1>${sub ? `<div class="sub">${sub}</div>` : ''}</div>
             <div class="grow"></div>${actions || ''}
           </div>
-          <main class="content" id="content">${body}</main>
-        </div>
+          <div class="content" id="content">${body}</div>
+        </main>
       </div>`;
     const menu = document.getElementById('umenu');
     document.getElementById('um').onclick = (e) => { e.stopPropagation(); menu.hidden = !menu.hidden; };
     document.addEventListener('click', () => (menu.hidden = true), { once: true });
     document.getElementById('cpw').onclick = () => { menu.hidden = true; changePassword(); };
     document.getElementById('logout').onclick = async () => { await api('POST', '/api/auth/logout'); S.user = null; renderLogin(); };
+    document.getElementById('logoutall').onclick = async () => {
+      if (!confirm('Sign out on every phone and computer where you are signed in?')) return;
+      await api('POST', '/api/auth/logout-all'); S.user = null; await renderLogin(); toast('Signed out of all devices');
+    };
     const side = document.getElementById('side');
     document.getElementById('menu').onclick = (e) => { e.stopPropagation(); side.classList.toggle('open'); };
     document.querySelector('.main').addEventListener('click', () => side.classList.remove('open'));
@@ -266,7 +275,7 @@
         <div class="accts">${d.bank.map((b) => `<div class="acct"><span>${esc(b.account)}</span><b>${inr(b.closing, false)}</b></div>`).join('')}</div>
       </section>`}
 
-      <div class="section-h" ${d.restricted ? 'style="margin-top:4px"' : ''}><h3>Today</h3></div>
+      <div class="section-h" ${d.restricted ? 'style="margin-top:4px"' : ''}><h2>Today</h2></div>
       <div class="panel strip" style="--n:${d.restricted ? 4 : 6}">
         ${stat('Bikes sold', T['SALES TODAY'], `HP ${num(T['HP SALES'])} · Cash ${num(T['CASH SALES'])}`)}
         ${stat('Sales value', T['SALES VALUE (ON-ROAD)'], 'on-road price', true)}
@@ -276,7 +285,7 @@
         ${stat('Bank transfers', T['BANK TRANSFER'], 'between accounts', true)}`}
       </div>
 
-      <div class="section-h"><h3>${esc(monthName)}</h3><span>month to date</span></div>
+      <div class="section-h"><h2>${esc(monthName)}</h2><span>month to date</span></div>
       <div class="panel strip" style="--n:${d.restricted ? 5 : 6}">
         ${stat('Bikes sold', M['VEHICLES SOLD · MONTH'])}
         ${stat('Collections', M['CUSTOMER COLLECTIONS · MONTH'], 'from customers', true)}
@@ -288,7 +297,7 @@
 
       <div class="cols">
         <div class="stack">
-          <div class="panel"><div class="panel-h"><h3>Follow up</h3><div class="grow"></div><small>${d.overdue.length + owes.length + dds.length || 'nothing'} pending</small></div><div class="panel-b">
+          <div class="panel"><div class="panel-h"><h2>Follow up</h2><div class="grow"></div><small>${d.overdue.length + owes.length + dds.length || 'nothing'} pending</small></div><div class="panel-b">
             <div class="group-l">Overdue bookings: call the customer</div>
             ${d.overdue.length ? `<ul class="rows">${d.overdue.map((o) => `<li><div class="who"><b>${esc(o.customer)}</b><small>${esc(o.model)} · ${esc(o.mobile)}</small></div><div class="amt"><span class="pill red">${o.late} ${o.late === 1 ? 'day' : 'days'} late</span><small>promised ${fdate(o.commitment)}</small></div></li>`).join('')}</ul>` : '<div class="empty-line">No overdue bookings.</div>'}
             <div class="group-l">Customer balance due · ${inr(M['CUSTOMER BALANCE DUE'], false)}</div>
@@ -297,17 +306,17 @@
             ${dds.length ? `<ul class="rows">${dds.map((b) => `<li><div class="who"><b>${esc(b.customer)}</b><small>${esc(b.model)} · ${esc(b.mobile)}</small></div><div class="amt"><b class="nowrap" style="color:var(--amber-d)">${inr(b.dd, false)}</b><small>sold ${fdate(b.date)}</small></div></li>`).join('')}</ul>` : '<div class="empty-line">No DD pending.</div>'}
           </div></div>
 
-          <div class="panel"><div class="panel-h"><h3>Bikes sold</h3><small>last 6 months</small></div><div class="panel-b">
+          <div class="panel"><div class="panel-h"><h2>Bikes sold</h2><small>last 6 months</small></div><div class="panel-b">
             <ul class="rows">${months.map((m) => `<li><div style="width:72px" class="${m.sold ? '' : 'muted'}">${fmonth(m.month)}</div><div class="barline">${m.sold ? bar(m.sold, maxSold) : ''}</div><div class="amt" style="width:64px">${m.sold ? `<b>${m.sold}</b>` : '<span class="muted">–</span>'}</div><div class="amt muted" style="width:104px">${m.collections ? inr(m.collections, false) : ''}</div></li>`).join('')}</ul>
             <div class="muted" style="font-size:12.5px;margin-top:6px">Right column: money collected from customers that month.</div>
           </div></div>
         </div>
 
         <div class="stack">
-          <div class="panel"><div class="panel-h"><h3>Stock in showroom</h3><div class="grow"></div><a href="#/s/stock">Open stock</a></div>
+          <div class="panel"><div class="panel-h"><h2>Stock in showroom</h2><div class="grow"></div><a href="#/s/stock">Open stock</a></div>
             <div class="strip s3" style="--n:3;border-bottom:1px solid var(--line-2)">
               ${stat('Bikes', inStock.length, `${allotted.length} allotted to bookings`)}
-              ${stat('Stock value', stockValue, 'purchase value', true)}
+              ${canDo('stock', 'view') ? stat('Stock value', stockValue, 'purchase value', true) : ''}
               ${stat('Over 60 days', old, old ? '<span class="warn">sell these first</span>' : 'none ageing')}
             </div>
             <div class="panel-b" style="padding-top:8px">
@@ -316,11 +325,11 @@
               <div class="muted" style="font-size:12.5px;margin-top:8px">Green is stock, amber is customers waiting for a bike. Red means order more.</div>` : '<div class="empty-line">No bikes in stock and nobody waiting.</div>'}
           </div></div>
 
-          ${d.restricted ? '' : `<div class="panel"><div class="panel-h"><h3>Expenses</h3><small>${esc(monthName)}</small></div><div class="panel-b">
+          ${d.restricted ? '' : `<div class="panel"><div class="panel-h"><h2>Expenses</h2><small>${esc(monthName)}</small></div><div class="panel-b">
             ${d.expenses.length ? `<ul class="rows">${d.expenses.map((e) => `<li><div class="who"><b>${esc(e.category)}</b></div><div class="barline">${bar(e.paid, maxExp, 'navy')}</div><div class="amt" style="width:90px">${inr(e.paid, false)}</div></li>`).join('')}</ul>` : '<div class="empty-line">No expenses this month.</div>'}
           </div></div>`}
 
-          <div class="panel"><div class="panel-h"><h3>Sales mix</h3><small>${esc(monthName)}</small></div><div class="panel-b">
+          <div class="panel"><div class="panel-h"><h2>Sales mix</h2><small>${esc(monthName)}</small></div><div class="panel-b">
             <ul class="rows">${d.mix.map((m) => `<li><div class="who"><b>${esc(m.mode === 'HP' ? 'Finance (HP)' : m.mode)}</b></div><div class="amt"><b>${m.count}</b> <span class="muted">${m.count === 1 ? 'bike' : 'bikes'}</span></div></li>`).join('')}
             ${d.financiers.map((f) => `<li><div class="who"><small>${esc(f.name)}</small></div><div class="amt"><small style="display:inline">${f.count} · DD ${inr(f.dd, false)}</small></div></li>`).join('')}</ul>
           </div></div>
@@ -436,7 +445,7 @@
     const count = (fn) => res.rows.filter(fn).length;
     const body = `
       <div class="toolbar">
-        <input class="search" id="q" placeholder="Search name, mobile, engine…" value="${esc(S.q[key] || '')}">
+        <input class="search" id="q" aria-label="Search entries" placeholder="Search name, mobile, engine…" value="${esc(S.q[key] || '')}">
         <div class="chips">${fl.map(([k, label, fn]) => `<button class="chip ${k === f[0] ? 'on' : ''}" data-f="${k}">${label}<span class="n">${count(fn)}</span></button>`).join('')}</div>
       </div>
       <div class="panel desk-table">${rows.length ? `<div class="tbl-wrap"><table><thead><tr>${cols.map((c) => `<th class="${c.type === 'money' || c.money ? 'num' : ''}">${esc(c.label)}</th>`).join('')}</tr></thead><tbody>
@@ -455,14 +464,58 @@
     if (nb) nb.onclick = () => openForm(key, null);
   }
 
+
+  // ---------- accessibility helpers ----------
+  let uid = 0;
+  const DIALOGS = [];   // open dialogs, newest last: keys go to the top one only
+  // tie every label to its field: screen readers name the field, and tapping the label focuses it
+  function linkLabels(root) {
+    root.querySelectorAll('.field').forEach((f) => {
+      const label = f.querySelector(':scope > label');
+      const ctl = f.querySelector('input:not([type=hidden]), select, textarea');
+      if (!label || !ctl || label.htmlFor) return;
+      if (!ctl.id) ctl.id = 'f' + (++uid);
+      label.htmlFor = ctl.id;
+    });
+  }
+  // drawers and pop-ups act as dialogs: announced as one, focus moves in and stays in, Escape closes, focus goes back
+  function asDialog(el, box, close, { focusBox = false } = {}) {
+    const opener = document.activeElement;
+    box.setAttribute('role', 'dialog'); box.setAttribute('aria-modal', 'true');
+    const h = box.querySelector('h3, h2');
+    if (h) { if (!h.id) h.id = 'dlg' + (++uid); box.setAttribute('aria-labelledby', h.id); }
+    linkLabels(box);
+    const focusables = () => [...box.querySelectorAll('a[href], button:not([disabled]), input:not([disabled]):not([type=hidden]), select:not([disabled]), textarea:not([disabled])')].filter((x) => x.offsetParent !== null);
+    DIALOGS.push(el);
+    const onKey = (e) => {
+      if (DIALOGS[DIALOGS.length - 1] !== el) return;
+      if (e.key === 'Escape') { e.preventDefault(); close(); return; }
+      if (e.key !== 'Tab') return;
+      const f = focusables(); if (!f.length) return;
+      const first = f[0], last = f[f.length - 1];
+      if (!box.contains(document.activeElement)) { e.preventDefault(); first.focus(); }
+      else if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    };
+    document.addEventListener('keydown', onKey);
+    el._release = () => { document.removeEventListener('keydown', onKey); const k = DIALOGS.indexOf(el); if (k >= 0) DIALOGS.splice(k, 1); if (opener && opener !== document.body && document.contains(opener)) opener.focus({ preventScroll: true }); };
+    // focus the panel itself, so phones don't pop the keyboard; Tab goes on to the first field
+    if (focusBox) { box.tabIndex = -1; box.focus({ preventScroll: true }); }
+  }
+
   // ---------- drawer: view / edit / new ----------
-  function closeDrawer() { document.querySelectorAll('.scrim,.drawer').forEach((x) => x.remove()); }
+  function closeDrawer() {
+    const open = [...document.querySelectorAll('.drawer')];
+    document.querySelectorAll('.scrim,.drawer').forEach((x) => x.remove());
+    open.forEach((x) => x._release?.());
+  }
   function drawer(html) {
     closeDrawer();
     const scrim = document.createElement('div'); scrim.className = 'scrim'; scrim.onclick = closeDrawer;
     const d = document.createElement('div'); d.className = 'drawer'; d.innerHTML = html;
     document.body.append(scrim, d);
     d.querySelectorAll('[data-close]').forEach((b) => b.onclick = closeDrawer);
+    asDialog(d, d, closeDrawer, { focusBox: true });
     return d;
   }
 
@@ -482,7 +535,21 @@
     return list.map((e) => ({ v: e.engine, t: `${e.engine} · ${e.model}${e.colour ? ' · ' + e.colour : ''}${e.status === 'Allotted' ? ' · allotted to ' + (e.to || '') : e.status === 'Sold' ? ' · sold' : ''}` }));
   }
 
+  // amounts far above normal are usually a typing slip (an extra zero): ask before saving
+  const HIGH = { stock: { G: 1500000 }, bookings: { G: 500000 }, service: { E: 100000 }, expenses: { F: 500000, G: 500000 },
+    sales: { K: 1500000, S: 1500000, V: 1500000, Y: 1500000, AB: 1500000, AC: 1500000 }, bank: { E: 5000000, F: 5000000 } };
+  let salesBal = 0;
+  function confirmUnusual(key, form, rec) {
+    const notes = [];
+    for (const [c, lim] of Object.entries(HIGH[key] || {})) {
+      if (num(form[c]) > lim && (!rec || String(rec[c]) !== String(form[c]))) notes.push(`${colOf(key, c).label}: ${inr(form[c], false)} is more than usual (over ${inr(lim, false)}).`);
+    }
+    if (key === 'sales' && salesBal < -0.5) notes.push(`Payments are ${inr(-salesBal, false)} more than the vehicle cost.`);
+    return !notes.length || confirm(`${notes.join('\n')}\n\nSave anyway?`);
+  }
+
   function openForm(key, rec) {
+    salesBal = 0;
     const sh = S.schema[key];
     const isNew = !rec;
     const res = S.data[key] || { pending: [], approved: [] };
@@ -570,6 +637,7 @@
         const paid = adv + num(form.S) + num(form.V) + num(form.Y);
         const dd = hp ? (form.AD ? num(form.AC) : num(form.AB)) : 0;
         const bal = total - paid - dd;
+        salesBal = bal;
         const ddPend = hp && !form.AD ? num(form.AB) - num(form.AC) : 0;
         d.querySelector('#tally').innerHTML = `
           <div><small>Total cost</small><b>${inr(total, false)}</b></div>
@@ -602,6 +670,7 @@
     const save = d.querySelector('#save');
     if (save) save.onclick = async () => {
       read();
+      if (!confirmUnusual(key, form, isNew ? null : rec)) return;
       const body = {};
       sh.cols.filter(canEdit).forEach((c) => {
         if (key === 'sales' && c.hpOnly && form.I !== 'HP') { if (!isNew && rec[c.c] !== '') body[c.c] = ''; return; }
@@ -629,15 +698,17 @@
       <div class="field"><label>What do you want to change, and why?</label><textarea id="why" rows="3" placeholder="e.g. Mobile number typed wrong, correct is 98xxxxxx"></textarea></div>
       <div class="acts"><button class="btn" id="c">Cancel</button><button class="btn primary" id="s">Send request</button></div></div>`;
     document.body.appendChild(m);
+    const close = () => { m.remove(); m._release?.(); };
+    asDialog(m, m.querySelector('.box'), close);
     m.querySelector('#why').focus();
-    m.querySelector('#c').onclick = () => m.remove();
-    m.querySelector('.scrim').onclick = () => m.remove();
+    m.querySelector('#c').onclick = () => close();
+    m.querySelector('.scrim').onclick = () => close();
     m.querySelector('#s').onclick = async () => {
       const reason = m.querySelector('#why').value.trim();
       if (!reason) return toast('Please write the reason', true);
       try {
         await api('POST', `/api/sheets/${key}/${rec._row}/request`, { reason });
-        m.remove(); closeDrawer(); toast('Request sent to the Admin'); pageSheet(key);
+        close(); closeDrawer(); toast('Request sent to the Admin'); pageSheet(key);
       } catch (e) { toast(e.message, true); }
     };
   }
@@ -691,8 +762,8 @@
       <td class="num">${S.user.approve && r.status === 'Pending' ? `<button class="btn sm primary" data-ok="${r.id}">Approve</button> <button class="btn sm danger" data-no="${r.id}">Reject</button>` : ''}</td></tr>`;
     const table = (list, empty) => list.length ? `<div class="tbl-wrap"><table><thead><tr><th>When</th><th>Requested by</th><th>Entry</th><th>Reason</th><th>Status</th><th></th></tr></thead><tbody>${list.map(row).join('')}</tbody></table></div>` : `<div class="empty">${empty}</div>`;
     shell('Edit Requests', S.user.approve ? 'Approve to open that entry for 30 minutes, only for the person who asked' : 'Your requests to change saved entries', exportBtn(), `
-      ${S.user.approve ? `<div class="panel" style="margin-bottom:16px"><div class="panel-h"><h3>Waiting for you</h3><small>${pend.length}</small></div>${table(pend, 'No pending requests.')}</div>` : ''}
-      <div class="panel"><div class="panel-h"><h3>${S.user.approve ? 'History' : 'My requests'}</h3></div>${table(S.user.approve ? requests.filter((r) => r.status !== 'Pending') : requests, 'No requests yet. Open a saved entry and use "Request edit".')}</div>`);
+      ${S.user.approve ? `<div class="panel" style="margin-bottom:16px"><div class="panel-h"><h2>Waiting for you</h2><small>${pend.length}</small></div>${table(pend, 'No pending requests.')}</div>` : ''}
+      <div class="panel"><div class="panel-h"><h2>${S.user.approve ? 'History' : 'My requests'}</h2></div>${table(S.user.approve ? requests.filter((r) => r.status !== 'Pending') : requests, 'No requests yet. Open a saved entry and use "Request edit".')}</div>`);
     const decide = async (id, status) => {
       try { await api('POST', `/api/requests/${id}`, { status }); toast(status === 'Approved' ? 'Approved: entry open for 30 minutes' : 'Request rejected'); pageApprovals(); }
       catch (e) { toast(e.message, true); }
@@ -748,8 +819,8 @@
         </button>`).join('')}</div>`;
     shell('Users & Roles', 'Who can sign in, and what each role can see and do',
       exportBtn() + (tab === 'users' ? `<button class="btn primary" id="add">${ic('userPlus')}<span class="new-label">Add user</span></button>`
-        : `<button class="btn primary" id="addr">${ic('plus')}<span class="new-label">New role</span></button>`), `
-      <div class="seg" role="tablist"><button class="${tab === 'users' ? 'on' : ''}" data-tab="users">Users <span>${A.users.length}</span></button><button class="${tab === 'roles' ? 'on' : ''}" data-tab="roles">Roles <span>${A.roles.length}</span></button></div>
+        : (S.user.isAdmin ? `<button class="btn primary" id="addr">${ic('plus')}<span class="new-label">New role</span></button>` : '')), `
+      <div class="seg" role="group" aria-label="Show"><button class="${tab === 'users' ? 'on' : ''}" aria-pressed="${tab === 'users'}" data-tab="users">Users <span>${A.users.length}</span></button><button class="${tab === 'roles' ? 'on' : ''}" aria-pressed="${tab === 'roles'}" data-tab="roles">Roles <span>${A.roles.length}</span></button></div>
       ${tab === 'users' ? usersHtml : rolesHtml}`);
     document.querySelectorAll('[data-tab]').forEach((b) => b.onclick = () => { S.accessTab = b.dataset.tab; pageAccess(); });
     wireExport(() => ({ title: 'Users and Roles', subtitle: `${A.users.length} users · ${A.roles.length} roles`, sections: [
@@ -759,15 +830,18 @@
         rows: A.roles.map((r) => [r.name, ...A.modules.map((m) => LEVEL_TEXT[r.perms[m.key] || 'none']), r.approve ? 'Yes' : 'No', r.manageUsers ? 'Yes' : 'No']) },
     ] }));
 
+    const privileged = (roleId) => { const r = A.roles.find((x) => x.id === roleId); return !!r && (r.system || r.manageUsers); };
     const editUser = (u) => {
       const isMe = u && u.id === S.user.id;
+      if (u && !isMe && !S.user.isAdmin && privileged(u.roleId)) return toast('Only an Admin can change Admins or people who manage users.', true);
+      const roleChoices = A.roles.filter((r) => S.user.isAdmin || !privileged(r.id));
       const d = drawer(`
         <div class="drawer-h"><div><h3>${u ? esc(u.name) : 'Add user'}</h3><small>${u ? '@' + esc(u.username) : 'They sign in with this username and password'}</small></div><div class="grow"></div><button class="icon-btn" data-close aria-label="Close">${ic('x')}</button></div>
         <form class="drawer-b" id="uf" novalidate autocomplete="off">
           <div class="fgroup"><h4>Person</h4><div class="fgrid">
             <div class="field"><label>Full name <span class="req">*</span></label><input name="name" value="${esc(u?.name || '')}" maxlength="60"></div>
             <div class="field"><label>Username <span class="req">*</span></label>${u ? `<div class="ro">${esc(u.username)}</div>` : '<input name="username" autocapitalize="none" spellcheck="false" placeholder="e.g. ravi" maxlength="30">'}</div>
-            <div class="field"><label>Role <span class="req">*</span></label>${isMe ? `<div class="ro">${esc(u.role)}</div>` : `<select name="roleId">${A.roles.map((r) => `<option value="${esc(r.id)}" ${(u ? u.roleId === r.id : r.id === 'sales') ? 'selected' : ''}>${esc(r.name)}</option>`).join('')}</select>`}</div>
+            <div class="field"><label>Role <span class="req">*</span></label>${isMe ? `<div class="ro">${esc(u.role)}</div>` : `<select name="roleId">${roleChoices.map((r) => `<option value="${esc(r.id)}" ${(u ? u.roleId === r.id : r.id === 'sales') ? 'selected' : ''}>${esc(r.name)}</option>`).join('')}</select>`}</div>
             <div class="field"><label>Account</label>${isMe ? '<div class="ro">Active</div>' : `<select name="active"><option value="yes" ${u?.active !== false ? 'selected' : ''}>Active: can sign in</option><option value="no" ${u?.active === false ? 'selected' : ''}>Turned off: cannot sign in</option></select>`}</div>
           </div></div>
           <div class="fgroup"><h4>${u ? 'Reset password' : 'Password'}</h4>
@@ -835,7 +909,7 @@
     const add = document.getElementById('add'); if (add) add.onclick = () => editUser(null);
     const addr = document.getElementById('addr'); if (addr) addr.onclick = () => editRole(null);
     document.querySelectorAll('[data-u]').forEach((tr) => tr.onclick = () => editUser(A.users.find((x) => x.id === tr.dataset.u)));
-    document.querySelectorAll('[data-r]').forEach((b) => b.onclick = () => editRole(A.roles.find((x) => x.id === b.dataset.r)));
+    document.querySelectorAll('[data-r]').forEach((b) => b.onclick = () => S.user.isAdmin ? editRole(A.roles.find((x) => x.id === b.dataset.r)) : toast('Only an Admin can change roles.', true));
   }
   const pwFieldInline = (ph) => `<div class="pw"><input name="password" type="password" autocomplete="new-password" placeholder="${esc(ph)}"><button type="button" class="icon-btn pw-eye" aria-label="Show password">${ic('eye')}</button></div>`;
 
@@ -885,7 +959,7 @@
     function draw(focusLast) {
       const n = notes();
       box.innerHTML = `
-        <div class="panel-h"><h3>${esc(def.label)}</h3><small>${items.length}${!def.locked ? ` of ${def.max}` : ''}</small></div>
+        <div class="panel-h"><h2>${esc(def.label)}</h2><small>${items.length}${!def.locked ? ` of ${def.max}` : ''}</small></div>
         <p class="m-hint">${esc(def.hint)}${!ro && def.fixed ? ` Items with ${ic('lock')} are used by the sheet's formulas and can't be renamed or removed.` : ''}</p>
         <div class="m-head"><span></span><span>Name</span>${def.opening ? '<span class="r">Opening balance (₹)</span>' : ''}<span>Used in</span><span></span></div>
         <ol class="m-rows">${items.map((it, i) => {
@@ -970,7 +1044,8 @@
     } catch (e) {
       if (e.status === 401) { S.user = null; return renderLogin(); }
       if (e.mustChange) return renderNewPassword();
-      if (S.user) shell('Error', '', '', `<div class="panel"><div class="empty">${esc(e.message)}<br><br><button class="btn" onclick="location.reload()">Try again</button></div></div>`);
+      if (S.user) shell('Error', '', '', `<div class="panel"><div class="empty">${esc(e.message)}<br><br><button class="btn" id="retry">Try again</button></div></div>`);
+      const rb = document.getElementById('retry'); if (rb) rb.onclick = () => location.reload();
     }
   }
 

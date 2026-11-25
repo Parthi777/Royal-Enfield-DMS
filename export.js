@@ -6,7 +6,7 @@ const ExcelJS = require('exceljs');
 const PDFDocument = require('pdfkit');
 
 const NAVY = '1A1A1D', TEAL = 'B8281F', MUTED = '667085', LINE = 'E3E7ED', ZEBRA = 'F6F8FB';
-const LOGO = path.join(__dirname, 'brand', 'logo.png');
+const LOGO = path.join(__dirname, 'brand', 'logo-256.png');
 const LOGO_SMALL = require('fs').readFileSync(path.join(__dirname, 'brand', 'logo-160.png'));
 const FONT = { r: path.join(__dirname, 'fonts', 'IBMPlexSans-Regular.woff'), b: path.join(__dirname, 'fonts', 'IBMPlexSans-SemiBold.woff') };
 // Indian grouping (₹12,34,567) in Excel
@@ -23,7 +23,10 @@ const inr = (v) => {
 };
 const show = (col, v) => (v === '' || v === null || v === undefined ? '' : col.type === 'money' ? inr(v) : col.type === 'date' ? fdate(v) : String(v));
 
+const MAX_ROWS = 5000;   // per export, all sections together
 function clean(p) {
+  const total = (p.sections || []).reduce((n, s) => n + (Array.isArray(s.rows) ? s.rows.length : 0), 0);
+  if (total > MAX_ROWS) { const e = new Error(`This export has ${total.toLocaleString('en-IN')} rows. Filter the list to ${MAX_ROWS.toLocaleString('en-IN')} rows or fewer.`); e.status = 400; throw e; }
   const out = { title: String(p.title || 'Report').slice(0, 120), subtitle: String(p.subtitle || '').slice(0, 300), sections: [] };
   for (const s of (p.sections || []).slice(0, 20)) {
     const columns = (s.columns || []).slice(0, 40).map((c) => ({ label: String(c.label || ''), type: ['money', 'num', 'date'].includes(c.type) ? c.type : 'text' }));

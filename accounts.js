@@ -38,6 +38,7 @@ function hashPassword(password, salt = crypto.randomBytes(16).toString('hex')) {
   const hash = crypto.scryptSync(String(password), salt, 64).toString('hex');
   return { salt, hash };
 }
+const DUMMY = hashPassword('not-a-real-password');
 function checkPassword(password, user) {
   if (!user?.hash || !user?.salt) return false;
   const a = Buffer.from(hashPassword(password, user.salt).hash, 'hex');
@@ -67,10 +68,31 @@ class Accounts {
   }
   needsSetup() { return this.db.users.length === 0; }
 
+  // ---------- signed-out sessions ----------
+  revoke(sid, exp) {
+    if (!sid) return;
+    const now = Date.now();
+    this.db.revoked = Object.fromEntries(Object.entries(this.db.revoked || {}).filter(([, e]) => e > now));
+    this.db.revoked[sid] = exp;
+    this.save();
+  }
+  isRevoked(sid) { return !!(sid && this.db.revoked && this.db.revoked[sid]); }
+  signOutEverywhere(id) {
+    const u = this.db.users.find((x) => x.id === id);
+    if (!u) return;
+    u.ver = (u.ver || 0) + 1;
+    this.save();
+  }
+
   // ---------- first admin ----------
-  setup({ code, name, username, password }) {
+  setup({ code, name, username, password }, ip = '') {
     if (!this.needsSetup()) throw httpError(400, 'Setup is already done. Please sign in.');
-    if (String(code || '').trim().toUpperCase() !== this.setupCode) throw httpError(403, 'Setup code is wrong. Copy it from the Railway deploy logs.');
+    const key = 'setup|' + ip, f = this.fails.get(key);
+    if (f && f.count >= 10 && Date.now() < f.until) throw httpError(429, 'Too many wrong setup codes. Try again in 10 minutes.');
+    if (String(code || '').trim().toUpperCase() !== this.setupCode) {
+      this.fails.set(key, { count: (f && Date.now() < f.until ? f.count : 0) + 1, until: Date.now() + 10 * 60000 });
+      throw httpError(403, 'Setup code is wrong. Copy it from the Railway deploy logs.');
+    }
     const u = this.createUser({ name, username, password, roleId: 'admin', active: true }, 'setup');
     this.setupCode = null;
     return u;
@@ -85,7 +107,9 @@ class Accounts {
       throw httpError(429, `Too many wrong passwords. Try again in ${Math.ceil((f.until - Date.now()) / 60000)} minutes.`);
     }
     const user = this.db.users.find((u) => u.username === username);
-    if (!user || !checkPassword(password, user)) {
+    // check a password even for unknown names, so the reply time doesn't reveal who has an account
+    const ok = checkPassword(password, user || DUMMY);
+    if (!user || !ok) {
       const n = (f && Date.now() < f.until ? f.count : 0) + 1;
       this.fails.set(key, { count: n, until: Date.now() + 10 * 60000 });
       throw httpError(401, 'Username or password is wrong.');
@@ -105,7 +129,7 @@ class Accounts {
     return {
       id: user.id, username: user.username, email: user.username, name: user.name,
       role: role.name, roleId: role.id, perms: role.system ? ALL('edit') : { ...ALL('none'), ...role.perms },
-      approve: !!role.approve, manageUsers: !!role.manageUsers, mustChange: !!user.mustChange,
+      approve: !!role.approve, manageUsers: !!role.manageUsers, mustChange: !!user.mustChange, isAdmin: !!role.system,
     };
   }
 
@@ -121,7 +145,8 @@ class Accounts {
     if (String(p || '').length < 6) throw httpError(400, 'Password must be at least 6 characters');
   }
 
-  createUser({ name, username, password, roleId, active = true }, by) {
+  createUser({ name, username, password, roleId, active = true }, by, me = null) {
+    if (me) this.guardStaff(me, null, roleId);
     username = cleanUsername(username);
     if (!/^[a-z0-9._-]{3,30}$/.test(username)) throw httpError(400, 'Username: 3 to 30 letters or numbers, no spaces');
     if (this.db.users.some((u) => u.username === username)) throw httpError(400, 'This username is already taken');
@@ -140,6 +165,7 @@ class Accounts {
   updateUser(id, body, me) {
     const u = this.db.users.find((x) => x.id === id);
     if (!u) throw httpError(404, 'User not found');
+    if (u.id !== me.id) this.guardStaff(me, u, body.roleId !== undefined && body.roleId !== u.roleId ? body.roleId : null);
     if (body.name !== undefined) {
       if (!String(body.name).trim()) throw httpError(400, 'Enter the person\'s name');
       u.name = String(body.name).trim().slice(0, 60);
@@ -178,13 +204,28 @@ class Accounts {
     return u;
   }
 
+  // ---------- who may manage whom ----------
+  // Only an Admin can touch Admin users, roles with "Manage users", or roles at all.
+  // Someone else with "Manage users" can add, turn off and reset ordinary staff only.
+  isAdmin(id) { const u = this.db.users.find((x) => x.id === id); return !!u && this.db.roles.find((r) => r.id === u.roleId)?.system === true; }
+  privilegedRole(roleId) { const r = this.db.roles.find((x) => x.id === roleId); return !!r && (r.system || r.manageUsers); }
+  guardStaff(me, target, roleId) {
+    if (this.isAdmin(me.id)) return;
+    if (target && this.privilegedRole(target.roleId)) throw httpError(403, 'Only an Admin can change Admins or people who manage users.');
+    if (roleId && this.privilegedRole(roleId)) throw httpError(403, 'Only an Admin can give someone the Admin role or a role that manages users.');
+  }
+  guardRoles(me) {
+    if (!this.isAdmin(me.id)) throw httpError(403, 'Only an Admin can create or change roles.');
+  }
+
   adminCount() { return this.db.users.filter((u) => u.roleId === 'admin' && u.active).length; }
 
   // ---------- roles ----------
   listRoles() {
     return this.db.roles.map((r) => ({ ...r, users: this.db.users.filter((u) => u.roleId === r.id).length }));
   }
-  saveRole(body) {
+  saveRole(body, me) {
+    this.guardRoles(me);
     const name = String(body.name || '').trim().slice(0, 40);
     if (!name) throw httpError(400, 'Enter a role name');
     let role = body.id ? this.db.roles.find((r) => r.id === body.id) : null;
@@ -205,7 +246,8 @@ class Accounts {
     this.save();
     return role;
   }
-  deleteRole(id) {
+  deleteRole(id, me) {
+    this.guardRoles(me);
     const role = this.db.roles.find((r) => r.id === id);
     if (!role) throw httpError(404, 'Role not found');
     if (role.system) throw httpError(400, 'The Admin role cannot be deleted');

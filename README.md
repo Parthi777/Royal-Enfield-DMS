@@ -17,7 +17,14 @@ A web app for the Royal Enfield showroom on top of the **RE Showroom Google Shee
   Two extra switches per role: **Approve edit requests** and **Manage users and roles**.
 - **Ready-made roles.** Admin (fixed, full access), Manager, Sales Executive, Service Advisor, Accountant and Viewer. You can change them or add your own.
 - **Money figures.** Only roles that can see the Bank Ledger see cash and bank balances and expenses on the dashboard.
-- **Security.** Passwords are stored hashed (scrypt), never in plain text. Five wrong passwords lock that username for 10 minutes. Resetting someone's password or turning their account off signs them out everywhere.
+- **Who manages whom.** Only an Admin can create or change Admins, people whose role has **Manage users**, and roles. Someone else with Manage users can add, turn off and reset ordinary staff only.
+- **Security.**
+  - Passwords are stored hashed (scrypt), never in plain text.
+  - Five wrong passwords lock that username for 10 minutes. Ten wrong setup codes lock setup for 10 minutes.
+  - **Sign out** ends that session even if the cookie was copied. **Sign out of all devices** (in the user menu) ends every session.
+  - Resetting someone's password or turning their account off signs them out everywhere.
+  - Bike purchase values are sent only to roles that can view Vehicle Stock.
+  - The site sends Content-Security-Policy, HSTS and Permissions-Policy headers.
 
 ### First start: create the Admin
 
@@ -54,6 +61,16 @@ When a customer pays into a bank account (GPay, UPI, NEFT, card), the form asks 
 
 Cash payments don't need one. The UTR also shows in the bank ledger particulars.
 
+## Checks on entries
+
+- **Dates:** impossible dates such as 31 Feb are refused.
+- **Sheet checks:** the app refuses what the sheet's Check column would flag:
+  - a Receipt with a Paid amount, or an Expense with a Received amount
+  - an expense or bank entry with no amount
+  - a commitment date before the booking date
+- **Confirmations:** amounts far above normal ask before saving, for example a booking advance over ₹5 lakh. So do sales payments above the vehicle cost.
+- **Edit requests:** an approval can be withdrawn, and a rejected request can't be reopened.
+
 ## Excel and PDF reports
 
 Every list has **Export → Excel / PDF**: stock, bookings, sales, service, expenses, bank entries, bank ledger statement, edit requests, users and roles, and the dashboard daily report.
@@ -61,6 +78,7 @@ Every list has **Export → Excel / PDF**: stock, bookings, sales, service, expe
 - The export follows the current filter and search.
 - Excel files have every column, with ₹ amounts in Indian format, dates, filters and totals.
 - PDFs show the on-screen columns, sized to fit the page, with page numbers.
+- One export runs at a time per person, up to 5,000 rows. Filter the list first for more.
 
 ## Demo mode
 

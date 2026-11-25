@@ -192,8 +192,8 @@ class DataService {
   }
 
   // ---------- edit requests ----------
-  async requests() {
-    const [grid] = await this.get([`'Edit Requests'!A3:I1002`]);
+  async requests(opts = {}) {
+    const [grid] = await this.get([`'Edit Requests'!A3:I1002`], opts);
     return grid.map((r, i) => ({
       id: 3 + i, at: r[0], by: String(r[1] || '').toLowerCase(), sheet: r[2], row: Number(r[3]) || 0,
       entry: r[4] || '', reason: r[5] || '', status: r[6] || (r[0] !== '' && r[0] !== undefined ? 'Pending' : ''),
@@ -227,8 +227,11 @@ class DataService {
 
   async decide(user, id, status) {
     if (!['Approved', 'Rejected'].includes(status)) throw httpError(400, 'Bad status');
-    const req = (await this.requests()).find((x) => x.id === id);
+    const req = (await this.requests({ fresh: true })).find((x) => x.id === id);
     if (!req) throw httpError(404, 'Request not found');
+    // a pending request can be approved or rejected; an approval can be withdrawn (Rejected); nothing else reopens
+    const withdraw = req.status === 'Approved' && status === 'Rejected';
+    if (req.status !== 'Pending' && !withdraw) throw httpError(400, `This request was already ${req.status.toLowerCase()}${req.decidedBy ? ' by ' + req.decidedBy : ''}.`);
     const until = status === 'Approved' ? istStamp(APPROVAL_MINUTES) : '';
     await this.write([{ range: `'Edit Requests'!G${id}:I${id}`, values: [[status, user.email, until]] }]);
     await this.log(user.email, req.sheet, `Row ${req.row}`, `Edit ${status.toLowerCase()} for ${req.by}: ${req.reason}`, '');
@@ -318,6 +321,9 @@ class DataService {
       if (v !== '') {
         if (col.type === 'date') {
           if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) throw httpError(400, `${col.label}: pick a date`);
+          const [y, m, d] = v.split('-').map(Number), dt = new Date(Date.UTC(y, m - 1, d));
+          if (dt.getUTCFullYear() !== y || dt.getUTCMonth() !== m - 1 || dt.getUTCDate() !== d) throw httpError(400, `${col.label}: ${v} is not a real date`);
+          if (y < 2000 || y > 2100) throw httpError(400, `${col.label}: check the year`);
         } else if (col.type === 'money') {
           const n = Number(v.replace(/[,₹\s]/g, ''));
           if (!isFinite(n) || n < 0) throw httpError(400, `${col.label}: enter an amount`);
@@ -376,6 +382,15 @@ class DataService {
       if (v.G && v.G === v.B) throw httpError(400, 'Contra account cannot be the same account');
     }
     if (key === 'expenses' && Number(v.F) > 0 && Number(v.G) > 0) throw httpError(400, 'Fill only Received or Paid, not both');
+    // the same checks the sheet's Check column makes, enforced when the fields involved are saved
+    const touch = (...cols) => !changed || cols.some((c) => c in changed);
+    if (key === 'expenses' && touch('C', 'F', 'G')) {
+      if (!(Number(v.F) > 0) && !(Number(v.G) > 0)) throw httpError(400, 'Enter the amount: Received for a Receipt, Paid for an Expense');
+      if (v.C === 'Receipt' && Number(v.G) > 0) throw httpError(400, 'A Receipt is money coming in: put the amount in Received, not Paid');
+      if (v.C === 'Expense' && Number(v.F) > 0) throw httpError(400, 'An Expense is money going out: put the amount in Paid, not Received');
+    }
+    if (key === 'bank' && touch('E', 'F') && !(Number(v.E) > 0) && !(Number(v.F) > 0)) throw httpError(400, 'Enter the amount in Credit / in or Debit / out');
+    if (key === 'bookings' && touch('A', 'I') && v.I && v.A && String(v.I) < String(v.A)) throw httpError(400, 'Commitment date can\'t be before the booking date');
   }
 
   // ---------- bank ledger (same rules as the sheet) ----------

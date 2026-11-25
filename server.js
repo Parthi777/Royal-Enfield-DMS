@@ -24,15 +24,27 @@ const app = express();
 app.disable('x-powered-by');
 app.set('trust proxy', 1);
 app.use(express.json({ limit: '6mb' }));
+// browser security headers: only this site's own scripts run, no framing, HTTPS only, no camera/mic/location
+const CSP = [
+  "default-src 'self'", "script-src 'self'", "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+  "font-src 'self' https://fonts.gstatic.com", "img-src 'self' data: blob:", "connect-src 'self'",
+  "object-src 'none'", "base-uri 'none'", "form-action 'self'", "frame-ancestors 'none'",
+].join('; ');
 app.use((req, res, next) => {
-  res.set({ 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'strict-origin-when-cross-origin', 'X-Frame-Options': 'DENY' });
+  res.set({
+    'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'strict-origin-when-cross-origin', 'X-Frame-Options': 'DENY',
+    'Content-Security-Policy': CSP,
+    'Permissions-Policy': 'camera=(), microphone=(), geolocation=(), payment=(), usb=()',
+  });
+  if (process.env.NODE_ENV === 'production') res.set('Strict-Transport-Security', 'max-age=31536000');
   next();
 });
 
 // ---------- session cookie (signed, httpOnly) ----------
 const sign = (s) => crypto.createHmac('sha256', SECRET).update(s).digest('base64url');
 function setSession(res, user) {
-  const body = Buffer.from(JSON.stringify({ uid: user.id, ver: user.ver || 0, exp: Date.now() + SESSION_HOURS * 3600e3 })).toString('base64url');
+  const sid = crypto.randomBytes(12).toString('base64url');   // lets one sign-out end just this session
+  const body = Buffer.from(JSON.stringify({ uid: user.id, ver: user.ver || 0, sid, exp: Date.now() + SESSION_HOURS * 3600e3 })).toString('base64url');
   res.setHeader('Set-Cookie', `re_sess=${body}.${sign(body)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${SESSION_HOURS * 3600}${process.env.NODE_ENV === 'production' ? '; Secure' : ''}`);
 }
 function readSession(req) {
@@ -42,7 +54,7 @@ function readSession(req) {
   if (!body || !sig) return null;
   const a = Buffer.from(sig), b = Buffer.from(sign(body));
   if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return null;
-  try { const s = JSON.parse(Buffer.from(body, 'base64url').toString()); return s.exp > Date.now() ? s : null; } catch { return null; }
+  try { const s = JSON.parse(Buffer.from(body, 'base64url').toString()); return s.exp > Date.now() && !accounts.isRevoked(s.sid) ? s : null; } catch { return null; }
 }
 
 const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
@@ -68,7 +80,7 @@ app.get('/api/config', (req, res) => res.json({ demo, showroom: SHOWROOM, needsS
 
 app.post('/api/auth/setup', sameOrigin, (req, res, next) => {
   try {
-    accounts.setup(req.body || {});
+    accounts.setup(req.body || {}, req.ip);
     const user = accounts.login(req.body.username, req.body.password, req.ip);
     setSession(res, user);
     res.json({ ok: true });
@@ -83,8 +95,18 @@ app.post('/api/auth/login', sameOrigin, (req, res, next) => {
   } catch (e) { next(e); }
 });
 
+const clearCookie = (res) => res.setHeader('Set-Cookie', `re_sess=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${process.env.NODE_ENV === 'production' ? '; Secure' : ''}`);
+// sign out: this session stops working everywhere it was copied to, not just in this browser
 app.post('/api/auth/logout', (req, res) => {
-  res.setHeader('Set-Cookie', 're_sess=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0');
+  const s = readSession(req);
+  if (s) accounts.revoke(s.sid, s.exp);
+  clearCookie(res);
+  res.json({ ok: true });
+});
+// sign out of every device (raises the user's session version)
+app.post('/api/auth/logout-all', sameOrigin, auth(), (req, res) => {
+  accounts.signOutEverywhere(req.user.id);
+  clearCookie(res);
   res.json({ ok: true });
 });
 
@@ -100,7 +122,9 @@ app.post('/api/auth/password', sameOrigin, auth(), (req, res, next) => {
 app.get('/api/me', auth(), (req, res) => res.json({ user: req.user, demo }));
 
 app.get('/api/bootstrap', auth(), wrap(async (req, res) => {
-  const [{ lists }, engines] = await Promise.all([data.masters(), data.engines()]);
+  const [{ lists }, all] = await Promise.all([data.masters(), data.engines()]);
+  // bike purchase values are dealer cost: only for roles that can open Vehicle Stock
+  const engines = rank(req.user.perms.stock) >= rank('view') ? all : all.map(({ value, ...e }) => e);
   res.json({ user: req.user, schema: SHEETS, modules: MODULES, levels: LEVELS, lists, engines, demo, showroom: SHOWROOM, persistent: accounts.persistent });
 }));
 
@@ -155,7 +179,13 @@ app.post('/api/requests/:id', sameOrigin, auth((u) => u.approve), wrap(async (re
 }));
 
 // ---------- Excel / PDF export of what the page shows ----------
+const exporting = new Set();   // one export at a time per user
 app.post('/api/export', sameOrigin, auth(), wrap(async (req, res) => {
+  if (exporting.has(req.user.id)) return res.status(429).json({ error: 'An export is already being made. Try again in a moment.' });
+  exporting.add(req.user.id);
+  try { await sendExport(req, res); } finally { exporting.delete(req.user.id); }
+}));
+async function sendExport(req, res) {
   const fmt = req.body?.format === 'pdf' ? 'pdf' : 'xlsx';
   const when = new Date(Date.now() + 330 * 60000).toISOString().slice(0, 16).replace('T', ' ');
   const meta = { showroom: SHOWROOM, user: req.user.name, when };
@@ -166,19 +196,19 @@ app.post('/api/export', sameOrigin, auth(), wrap(async (req, res) => {
     'Content-Disposition': `attachment; filename="${base}-${when.slice(0, 10)}.${fmt}"`,
   });
   res.send(Buffer.from(buf));
-}));
+}
 
 // ---------- users & roles ----------
 const admin = auth((u) => u.manageUsers);
 const json = (fn) => (req, res, next) => { try { res.json(fn(req) ?? { ok: true }); } catch (e) { next(e); } };
 app.get('/api/access', admin, json(() => ({ users: accounts.listUsers(), roles: accounts.listRoles(), modules: MODULES, levels: LEVELS })));
-app.post('/api/access/users', sameOrigin, admin, json((req) => accounts.createUser(req.body || {}, req.user.username)));
+app.post('/api/access/users', sameOrigin, admin, json((req) => accounts.createUser(req.body || {}, req.user.username, req.user)));
 app.put('/api/access/users/:id', sameOrigin, admin, json((req) => accounts.updateUser(req.params.id, req.body || {}, req.user)));
-app.post('/api/access/roles', sameOrigin, admin, json((req) => accounts.saveRole(req.body || {})));
-app.delete('/api/access/roles/:id', sameOrigin, admin, json((req) => { accounts.deleteRole(req.params.id); }));
+app.post('/api/access/roles', sameOrigin, admin, json((req) => accounts.saveRole(req.body || {}, req.user)));
+app.delete('/api/access/roles/:id', sameOrigin, admin, json((req) => { accounts.deleteRole(req.params.id, req.user); }));
 
 // ---------- static UI ----------
-const PUBLIC = { '/app.js': 'app.js', '/icons.js': 'icons.js', '/style.css': 'style.css', '/brand/logo.png': 'brand/logo.png', '/favicon.png': 'brand/favicon.png', '/apple-touch-icon.png': 'brand/apple-touch-icon.png' };   // only these files are served
+const PUBLIC = { '/app.js': 'app.js', '/icons.js': 'icons.js', '/style.css': 'style.css', '/brand/logo.png': 'brand/logo-400.png', '/brand/logo-160.png': 'brand/logo-160.png', '/favicon.png': 'brand/favicon.png', '/apple-touch-icon.png': 'brand/apple-touch-icon.png' };   // only these files are served
 // Each deploy gets its own version tag, so browsers never mix an old script with a new page.
 const BUILD = (process.env.RAILWAY_GIT_COMMIT_SHA || String(Date.now())).slice(0, 12);
 const INDEX = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8')
