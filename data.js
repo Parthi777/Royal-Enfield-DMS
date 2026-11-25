@@ -1,5 +1,5 @@
 // Business logic on top of the store: rows, masters, users, approvals, ledger, dashboard.
-const { FIRST_ROW, LAST_ROW, SHEETS, MASTERS, colIndex, colLetter, inputCols } = require('./schema');
+const { FIRST_ROW, LAST_ROW, SHEETS, MASTERS, MASTER_LISTS, colIndex, colLetter, inputCols } = require('./schema');
 
 const IST_MIN = 330;
 const APPROVAL_MINUTES = 30;
@@ -70,8 +70,8 @@ class DataService {
     return out;
   }
 
-  async masters() {
-    const [grid] = await this.get([`Masters!A3:K150`]);
+  async masters(opts = {}) {
+    const [grid] = await this.get([`Masters!A3:K150`], opts);
     const lists = {};
     Object.values(MASTERS).forEach((n) => (lists[n] = []));
     grid.forEach((row) => {
@@ -84,6 +84,103 @@ class DataService {
     lists.accounts.forEach((a, i) => (opening[a] = Number(grid[i]?.[colIndex('J') - 1]) || 0));
     delete lists.opening;
     return { lists, opening };
+  }
+
+  // ---------- Masters page ----------
+  // where each list value is used: { list: { value: [{ sheet, c, row }] } }
+  async usage() {
+    const keys = Object.keys(SHEETS);
+    const all = await Promise.all(keys.map((k) => this.rows(k, { fresh: true })));
+    const out = {};
+    keys.forEach((k, i) => SHEETS[k].cols.filter((c) => c.type === 'list' && c.list).forEach((c) => {
+      all[i].forEach((r) => {
+        const v = String(r[c.c]);
+        if (v === '') return;
+        const m = (out[c.list] = out[c.list] || {});
+        (m[v] = m[v] || []).push({ sheet: SHEETS[k].name, c: c.c, row: r._row });
+      });
+    }));
+    return out;
+  }
+
+  async masterPage() {
+    const [{ lists, opening }, usage] = await Promise.all([this.masters({ fresh: true }), this.usage()]);
+    const count = {};
+    for (const [list, m] of Object.entries(usage)) count[list] = Object.fromEntries(Object.entries(m).map(([v, refs]) => [v, refs.length]));
+    return { defs: MASTER_LISTS, lists, opening, used: count };
+  }
+
+  // items: [{ value, was, opening }] in the new order; was = the saved name it replaces (null for a new item)
+  async saveMaster(user, key, items) {
+    const def = MASTER_LISTS.find((d) => d.key === key);
+    if (!def) throw httpError(404, 'Unknown list');
+    if (def.locked) throw httpError(400, `${def.label} can't be changed: the sheet's rules work with these values only.`);
+    if (!Array.isArray(items)) throw httpError(400, 'Send the list items');
+    return this.withLock('Masters', async () => {
+      const { lists, opening } = await this.masters({ fresh: true });
+      const cur = lists[key].map(String);
+      const seen = new Set(), out = [];
+      for (const it of items) {
+        const value = String(it?.value ?? '').trim().replace(/\s+/g, ' ');
+        if (!value) throw httpError(400, 'An item is empty: type a name or remove it.');
+        if (value.length > 60) throw httpError(400, `"${value.slice(0, 20)}…" is too long (60 characters at most).`);
+        if (/^[=+\-@]/.test(value)) throw httpError(400, `"${value}": a name can't start with = + - or @.`);
+        const k = value.toLowerCase();
+        if (seen.has(k)) throw httpError(400, `"${value}" is in the list twice.`);
+        seen.add(k);
+        const was = it.was !== null && it.was !== undefined && cur.includes(String(it.was)) ? String(it.was) : null;
+        let op = 0;
+        if (def.opening) {
+          op = it.opening === '' || it.opening === null || it.opening === undefined ? 0 : Number(it.opening);
+          if (!isFinite(op)) throw httpError(400, `Opening balance of ${value} is not a number.`);
+          op = Math.round(op * 100) / 100;
+        }
+        out.push({ value, was, opening: op });
+      }
+      if (!out.length) throw httpError(400, 'Keep at least one item.');
+      if (out.length > def.max) throw httpError(400, `${def.label}: ${def.max} at most (that's what the sheet's dashboard has room for).`);
+      const wasUsed = new Set();
+      for (const o of out) {
+        if (!o.was) continue;
+        if (wasUsed.has(o.was)) throw httpError(400, `"${o.was}" can't become two items.`);
+        wasUsed.add(o.was);
+      }
+      const removed = cur.filter((v) => !wasUsed.has(v));
+      const renamed = out.filter((o) => o.was && o.was !== o.value);
+      for (const f of def.fixed || []) {
+        if (!cur.includes(f)) continue;
+        if (removed.includes(f) || renamed.some((o) => o.was === f)) throw httpError(400, `"${f}" can't be renamed or removed: the sheet's formulas use it.`);
+      }
+      const usage = (await this.usage())[key] || {};
+      if (def.opening) {
+        const busy = removed.find((v) => usage[v]?.length);
+        if (busy) throw httpError(400, `"${busy}" has ${usage[busy].length} saved entries, so it can't be removed. Rename it instead.`);
+      }
+
+      // write the list (and opening balances) top to bottom, blanking the rest
+      const rows = 148;
+      const col = (fn) => Array.from({ length: rows }, (_, i) => [i < out.length ? fn(out[i]) : '']);
+      const writes = [{ range: `Masters!${def.col}3:${def.col}${2 + rows}`, values: col((o) => o.value) }];
+      if (def.opening) writes.push({ range: `Masters!${def.opening}3:${def.opening}${2 + rows}`, values: col((o) => o.opening) });
+      // carry renames into saved entries so old rows still match
+      let moved = 0;
+      for (const o of renamed) for (const ref of usage[o.was] || []) {
+        writes.push({ range: `${q(ref.sheet)}!${ref.c}${ref.row}`, values: [[o.value]] });
+        moved++;
+      }
+      await this.write(writes);
+
+      const logs = [];
+      for (const o of renamed) logs.push([def.label, o.was, `${o.value}${usage[o.was]?.length ? ` (and ${usage[o.was].length} saved entries)` : ''}`]);
+      for (const o of out.filter((x) => !x.was)) logs.push([def.label, '(new)', o.value]);
+      for (const v of removed) logs.push([def.label, v, '(removed)']);
+      if (def.opening) for (const o of out) {
+        const before = o.was ? (opening[o.was] || 0) : 0;
+        if (o.was && before !== o.opening) logs.push([`${def.label}: opening balance of ${o.value}`, before, o.opening]);
+      }
+      if (logs.length) await this.logMany(user.email, 'Masters', logs);
+      return { saved: out.length, entriesUpdated: moved };
+    });
   }
 
   async engines() {
@@ -136,6 +233,16 @@ class DataService {
     await this.write([{ range: `'Edit Requests'!G${id}:I${id}`, values: [[status, user.email, until]] }]);
     await this.log(user.email, req.sheet, `Row ${req.row}`, `Edit ${status.toLowerCase()} for ${req.by}: ${req.reason}`, '');
     return { ok: true };
+  }
+
+  async logMany(user, sheet, rows) {
+    await this.withLock('Edit Log', async () => {
+      const [grid] = await this.get([`'Edit Log'!A2:A5000`], { fresh: true });
+      let idx = grid.findIndex((r) => isEmpty(r[0]));
+      if (idx < 0) idx = grid.length;
+      const r = 2 + idx, stamp = istStamp();
+      await this.write([{ range: `'Edit Log'!A${r}:F${r + rows.length - 1}`, values: rows.map(([cell, a, b]) => [stamp, user, sheet, cell, safeText(String(a)), safeText(String(b))]) }]);
+    });
   }
 
   async log(user, sheet, cell, oldVal, newVal) {

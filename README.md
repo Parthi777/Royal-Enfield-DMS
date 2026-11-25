@@ -33,6 +33,17 @@ Users and roles are saved in `accounts.json` in the app's data folder.
 - **On Railway:** add a volume to the service mounted at **`/data`** (right-click the service → *Attach volume*, mount path `/data`). Without it, accounts are lost at every redeploy.
 - **Elsewhere:** set `DATA_DIR` to the folder to use.
 
+## Masters (dropdown lists)
+
+**Control → Masters** is where the dropdown lists are kept: models, variants, colours, cash and bank accounts (with opening balances), financiers, expense categories, service types and bank entry types. You can add, rename, remove and reorder items.
+
+- **Renaming:** renaming an item also changes it in every saved entry, so old entries still match. For example, renaming "Bank A/c 1" to "HDFC CA 4521" keeps its ledger.
+- **Removing:** a removed item leaves the dropdown, and saved entries keep the old name. An account that has saved entries can't be removed: rename it instead.
+- **Fixed names:** some names are used by the sheet's formulas: Cash in Hand, Paid/Free, Cash Deposit/Transfer, Cash/HP and Receipt/Expense. They can't be renamed or removed.
+- **Limits:** the sheet's dashboard has room for 20 models, 12 accounts, 16 financiers and 13 expense categories.
+- **Edit Log:** every change is recorded there.
+- **Access:** set it per role under Users & Roles (No access, View or Edit). The Admin always has Edit.
+
 ## Payment reference (UTR)
 
 When a customer pays into a bank account (GPay, UPI, NEFT, card), the form asks for the **UTR / reference no** next to that payment:

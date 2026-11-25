@@ -16,11 +16,13 @@ const MODULES = [
   { key: 'expenses', label: 'Expenses' },
   { key: 'bank', label: 'Bank Entries' },
   { key: 'ledger', label: 'Bank Ledger', levels: ['none', 'view'] },
+  { key: 'masters', label: 'Masters', levels: ['none', 'view', 'edit'] },
 ];
 const LEVELS = ['none', 'view', 'add', 'edit'];
 const rank = (l) => Math.max(0, LEVELS.indexOf(l));
 
-const ALL = (lvl) => Object.fromEntries(MODULES.map((m) => [m.key, m.levels ? (rank(lvl) >= 1 ? 'view' : 'none') : lvl]));
+// highest level each section allows, up to lvl (Dashboard and Bank Ledger only go to view)
+const ALL = (lvl) => Object.fromEntries(MODULES.map((m) => [m.key, m.levels ? [...m.levels].reverse().find((l) => rank(l) <= rank(lvl)) : lvl]));
 const DEFAULT_ROLES = [
   { id: 'admin', name: 'Admin', system: true, perms: ALL('edit'), approve: true, manageUsers: true },
   { id: 'manager', name: 'Manager', perms: ALL('add'), approve: false, manageUsers: false },
@@ -102,7 +104,7 @@ class Accounts {
     const role = this.db.roles.find((r) => r.id === user.roleId) || { name: '—', perms: ALL('none') };
     return {
       id: user.id, username: user.username, email: user.username, name: user.name,
-      role: role.name, roleId: role.id, perms: { ...ALL('none'), ...role.perms },
+      role: role.name, roleId: role.id, perms: role.system ? ALL('edit') : { ...ALL('none'), ...role.perms },
       approve: !!role.approve, manageUsers: !!role.manageUsers, mustChange: !!user.mustChange,
     };
   }

@@ -172,7 +172,7 @@
     ['', [['#/dashboard', 'Dashboard', 'dash', 'dashboard']]],
     ['Showroom', [['#/s/stock', 'Vehicle Stock', 'stock', 'stock'], ['#/s/bookings', 'Bookings', 'bookings', 'bookings'], ['#/s/sales', 'Vehicle Sales', 'sales', 'sales'], ['#/s/service', 'Service', 'service', 'service']]],
     ['Accounts', [['#/s/expenses', 'Expenses', 'expenses', 'expenses'], ['#/s/bank', 'Bank Entries', 'bank', 'bank'], ['#/ledger', 'Bank Ledger', 'ledger', 'ledger']]],
-    ['Control', [['#/approvals', 'Edit Requests', 'approvals', '@approvals'], ['#/access', 'Users & Roles', 'roles', '@users']]],
+    ['Control', [['#/approvals', 'Edit Requests', 'approvals', '@approvals'], ['#/masters', 'Masters', 'masters', 'masters'], ['#/access', 'Users & Roles', 'roles', '@users']]],
   ];
   const navAllowed = (k) => k === '@users' ? !!S.user.manageUsers
     : k === '@approvals' ? (S.user.approve || Object.values(S.user.perms || {}).some((v) => v === 'add'))
@@ -839,6 +839,116 @@
   }
   const pwFieldInline = (ph) => `<div class="pw"><input name="password" type="password" autocomplete="new-password" placeholder="${esc(ph)}"><button type="button" class="icon-btn pw-eye" aria-label="Show password">${ic('eye')}</button></div>`;
 
+  // ---------- masters: dropdown lists ----------
+  const ONE = { models: 'model', variants: 'variant', colours: 'colour', accounts: 'account', financiers: 'financier', expenseCats: 'category', serviceTypes: 'service type', bankTypes: 'entry type' };
+  async function pageMasters() {
+    loading('Masters');
+    const M = await api('GET', '/api/masters');
+    const canEditM = canDo('masters', 'edit');
+    if (!M.defs.some((d) => d.key === S.mTab)) S.mTab = 'models';
+    const def = M.defs.find((d) => d.key === S.mTab);
+    const saved = (M.lists[def.key] || []).map(String);
+    const start = () => saved.map((v) => ({ value: v, was: v, opening: def.opening ? (M.opening[v] || 0) : null }));
+    let items = start();
+    const used = (v) => (M.used[def.key] || {})[v] || 0;
+    const sig = (arr) => JSON.stringify(arr.map((i) => [i.value.trim(), i.was, def.opening ? Number(i.opening) || 0 : 0]));
+    const dirty = () => sig(items) !== sig(start());
+    const ro = !canEditM || def.locked;
+    const fixed = new Set(def.locked ? saved : (def.fixed || []));
+    const fmtOp = (v) => (v === '' || v === null || v === undefined || !isFinite(Number(v)) ? (v ?? '') : Number(v).toLocaleString('en-IN', { maximumFractionDigits: 2 }));
+
+    shell('Masters', 'The dropdown lists used across the app and the Google Sheet', exportBtn(), `
+      <div class="masters">
+        <nav class="m-lists" aria-label="Lists">${M.defs.map((d) => `<button class="${d.key === def.key ? 'on' : ''}" data-list="${d.key}">
+          <span>${esc(d.label)}</span><span class="n">${(M.lists[d.key] || []).length}</span></button>`).join('')}</nav>
+        <div class="panel m-edit${def.opening ? ' has-op' : ''}" id="medit"></div>
+      </div>`);
+    const box = document.getElementById('medit');
+
+    function notes() {
+      const out = [];
+      const ren = items.filter((i) => i.was && i.value.trim() && i.value.trim() !== i.was && used(i.was));
+      const moved = ren.reduce((n, i) => n + used(i.was), 0);
+      if (moved) out.push(`<div class="notice info">${ic('info')}<div>Renaming also changes ${moved} saved ${moved === 1 ? 'entry' : 'entries'} in the sheet, so old entries match the new name.</div></div>`);
+      const gone = saved.filter((v) => !items.some((i) => i.was === v) && used(v));
+      if (gone.length && def.opening) out.push(`<div class="notice warn">${ic('alert')}<div><b>${esc(gone[0])}</b> has ${used(gone[0])} saved entries, so it can't be removed. Undo, then rename it instead.</div></div>`);
+      else if (gone.length) out.push(`<div class="notice info">${ic('info')}<div>${gone.map(esc).join(', ')} will leave the dropdown. Saved entries that use ${gone.length === 1 ? 'it' : 'them'} keep the name.</div></div>`);
+      return { html: out.join(''), blocked: !!(gone.length && def.opening) };
+    }
+    function syncButtons() {
+      const n = notes(), d = dirty();
+      const s = box.querySelector('#msave'), u = box.querySelector('#mundo');
+      if (s) s.disabled = !d || n.blocked;
+      if (u) u.disabled = !d;
+      const nb = box.querySelector('.m-notes'); if (nb) nb.innerHTML = n.html;
+    }
+    function draw(focusLast) {
+      const n = notes();
+      box.innerHTML = `
+        <div class="panel-h"><h3>${esc(def.label)}</h3><small>${items.length}${!def.locked ? ` of ${def.max}` : ''}</small></div>
+        <p class="m-hint">${esc(def.hint)}${!ro && def.fixed ? ` Items with ${ic('lock')} are used by the sheet's formulas and can't be renamed or removed.` : ''}</p>
+        <div class="m-head"><span></span><span>Name</span>${def.opening ? '<span class="r">Opening balance (₹)</span>' : ''}<span>Used in</span><span></span></div>
+        <ol class="m-rows">${items.map((it, i) => {
+          const lock = fixed.has(it.was);
+          return `<li data-i="${i}">
+            <span class="m-num">${i + 1}</span>
+            <input class="m-val" value="${esc(it.value)}" ${ro || lock ? 'readonly' : ''} maxlength="60" aria-label="${esc(ONE[def.key] || 'item')} ${i + 1}" placeholder="New ${esc(ONE[def.key] || 'item')}">
+            ${def.opening ? `<input class="m-op" inputmode="decimal" value="${esc(fmtOp(it.opening))}" ${ro ? 'readonly' : ''} aria-label="Opening balance of ${esc(it.value || 'new account')}">` : ''}
+            <span class="m-used">${!it.was ? '<span class="pill teal">New</span>' : used(it.was) ? `${used(it.was)} ${used(it.was) === 1 ? 'entry' : 'entries'}` : '<span class="muted">Not used</span>'}</span>
+            <span class="m-act">${ro ? (lock && !def.locked ? `<span class="m-lock" title="Used by the sheet's formulas">${ic('lock')}</span>` : '') : `
+              ${lock ? `<span class="m-lock" title="Used by the sheet's formulas">${ic('lock')}</span>` : ''}
+              <button class="icon-btn" data-mv="-1" ${i === 0 ? 'disabled' : ''} aria-label="Move up">${ic('up')}</button>
+              <button class="icon-btn" data-mv="1" ${i === items.length - 1 ? 'disabled' : ''} aria-label="Move down">${ic('down')}</button>
+              <button class="icon-btn m-del" data-del ${lock ? 'disabled' : ''} aria-label="Remove">${ic('trash')}</button>`}</span>
+          </li>`; }).join('')}</ol>
+        ${def.locked ? `<div class="m-foot"><div class="notice info" style="margin:0">${ic('lock')}<div>These values are fixed: the sheet's rules check for them by name.</div></div></div>` : ''}
+        ${ro ? '' : `<div class="m-foot"><button class="btn" id="madd" ${items.length >= def.max ? 'disabled' : ''}>${ic('plus')}Add ${esc(ONE[def.key] || 'item')}</button></div>`}
+        <div class="m-notes">${n.html}</div>
+        ${ro ? '' : `<div class="m-save"><button class="btn primary" id="msave" disabled>Save changes</button><button class="btn" id="mundo" disabled>${ic('undo')}Undo changes</button></div>`}`;
+      syncButtons();
+      box.querySelectorAll('.m-rows li').forEach((li) => {
+        const i = +li.dataset.i;
+        const v = li.querySelector('.m-val'), o = li.querySelector('.m-op');
+        v.oninput = () => { items[i].value = v.value; syncButtons(); };
+        if (o) { o.oninput = () => { items[i].opening = o.value.replace(/[₹,\s]/g, ''); syncButtons(); }; o.onblur = () => { o.value = fmtOp(items[i].opening); }; }
+        li.querySelectorAll('[data-mv]').forEach((b) => b.onclick = () => {
+          const j = i + Number(b.dataset.mv); [items[i], items[j]] = [items[j], items[i]]; draw();
+          box.querySelector(`li[data-i="${j}"] [data-mv="${b.dataset.mv}"]`)?.focus();
+        });
+        const del = li.querySelector('[data-del]');
+        if (del) del.onclick = () => { items.splice(i, 1); draw(); };
+      });
+      const add = box.querySelector('#madd');
+      if (add) add.onclick = () => { items.push({ value: '', was: null, opening: def.opening ? 0 : null }); draw(true); };
+      if (focusLast) box.querySelector('.m-rows li:last-child .m-val')?.focus();
+      const undo = box.querySelector('#mundo');
+      if (undo) undo.onclick = () => { items = start(); draw(); };
+      const save = box.querySelector('#msave');
+      if (save) save.onclick = async () => {
+        save.disabled = true;
+        try {
+          const r = await api('PUT', `/api/masters/${def.key}`, { items: items.map((i) => ({ value: i.value, was: i.was, opening: i.opening })) });
+          S.lists = r.lists;
+          toast(`${def.label} saved${r.entriesUpdated ? `: ${r.entriesUpdated} saved ${r.entriesUpdated === 1 ? 'entry' : 'entries'} updated too` : ''}`);
+          pageMasters();
+        } catch (e) { toast(e.message, true); syncButtons(); }
+      };
+    }
+    draw();
+
+    document.querySelectorAll('[data-list]').forEach((b) => b.onclick = () => {
+      if (b.dataset.list === def.key) return;
+      if (dirty() && !confirm(`Discard your unsaved changes to ${def.label}?`)) return;
+      S.mTab = b.dataset.list; pageMasters();
+    });
+    wireExport(() => ({ title: 'Masters', subtitle: 'Dropdown lists', sections: M.defs.map((d) => ({
+      heading: d.label,
+      columns: [{ label: 'Name' }, ...(d.opening ? [{ label: 'Opening balance', type: 'money' }] : []), { label: 'Used in entries', type: 'num' }],
+      rows: (M.lists[d.key] || []).map((v) => [String(v), ...(d.opening ? [M.opening[v] || 0] : []), (M.used[d.key] || {})[v] || 0]),
+      totals: d.opening ? ['Total', (M.lists[d.key] || []).reduce((s, v) => s + (M.opening[v] || 0), 0), ''] : null,
+    })) }));
+  }
+
   function route404() {
     const p = firstPage();
     if (p && p !== location.hash) { location.hash = p; return; }
@@ -848,13 +958,14 @@
   async function route() {
     closeDrawer();
     const h = location.hash || firstPage() || '#/dashboard';
-    const key = h.startsWith('#/s/') ? h.slice(4) : h === '#/ledger' ? 'ledger' : h === '#/access' ? '@users' : h === '#/approvals' ? '@approvals' : 'dashboard';
+    const key = h.startsWith('#/s/') ? h.slice(4) : h === '#/ledger' ? 'ledger' : h === '#/access' ? '@users' : h === '#/approvals' ? '@approvals' : h === '#/masters' ? 'masters' : 'dashboard';
     if (!navAllowed(key)) return route404();
     try {
       if (h.startsWith('#/s/')) await pageSheet(h.slice(4));
       else if (h === '#/ledger') await pageLedger();
       else if (h === '#/approvals') await pageApprovals();
       else if (h === '#/access') await pageAccess();
+      else if (h === '#/masters') await pageMasters();
       else await pageDashboard();
     } catch (e) {
       if (e.status === 401) { S.user = null; return renderLogin(); }

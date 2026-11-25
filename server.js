@@ -116,6 +116,13 @@ app.get('/api/dashboard', auth(can('dashboard', 'view')), wrap(async (req, res) 
   res.json(d);
 }));
 app.get('/api/ledger', auth(can('ledger', 'view')), wrap(async (req, res) => res.json(await data.ledger())));
+// Masters: dropdown lists (models, variants, colours, accounts…)
+app.get('/api/masters', auth(can('masters', 'view')), wrap(async (req, res) => res.json(await data.masterPage())));
+app.put('/api/masters/:list', sameOrigin, auth(can('masters', 'edit')), wrap(async (req, res) => {
+  const r = await data.saveMaster(req.user, req.params.list, req.body.items);
+  const { lists } = await data.masters({ fresh: true });
+  res.json({ ...r, lists });
+}));
 
 app.get('/api/sheets/:key', auth(can(sheetKey, 'view')), wrap(async (req, res) => {
   const [rows, reqs] = await Promise.all([data.rows(req.params.key), data.requests()]);

@@ -151,6 +151,22 @@ const MASTERS = {
   G: 'serviceTypes', H: 'entryTypes', I: 'accounts', J: 'opening', K: 'bankTypes',
 };
 
+// What the Masters page can edit. max = rows the sheet's own formulas and dashboard cover.
+// fixed = names the sheet's formulas look for: they can't be renamed or removed.
+// locked = the whole list is fixed (the sheet's rules only know these values).
+const MASTER_LISTS = [
+  { key: 'models', label: 'Models', col: 'A', max: 20, hint: 'Bike models. Used in stock, bookings and sales.' },
+  { key: 'variants', label: 'Variants', col: 'B', max: 148, hint: 'Variants for any model.' },
+  { key: 'colours', label: 'Colours', col: 'C', max: 148, hint: 'Colours for any model.' },
+  { key: 'accounts', label: 'Cash and bank accounts', col: 'I', opening: 'J', max: 12, fixed: ['Cash in Hand'], hint: 'Where money is received or paid from, with the opening balance of each.' },
+  { key: 'financiers', label: 'Financiers', col: 'D', max: 16, hint: 'Banks and finance companies for HP sales.' },
+  { key: 'expenseCats', label: 'Expense categories', col: 'E', max: 13, hint: 'Categories for the Expenses tab.' },
+  { key: 'serviceTypes', label: 'Service types', col: 'G', max: 148, fixed: ['Paid', 'Free'], hint: 'Types of service job.' },
+  { key: 'bankTypes', label: 'Bank entry types', col: 'K', max: 148, fixed: ['Cash Deposit', 'Transfer'], hint: 'Types for the Bank Entries tab.' },
+  { key: 'modes', label: 'Purchase modes', col: 'F', locked: true, hint: 'Cash or HP. The sheet\'s rules work with these two only.' },
+  { key: 'entryTypes', label: 'Expense entry types', col: 'H', locked: true, hint: 'Receipt or Expense. The sheet\'s rules work with these two only.' },
+];
+
 const ROLES = ['Admin', 'Manager', 'Staff', 'Viewer'];
 
 function colIndex(letter) {
@@ -165,4 +181,4 @@ function colLetter(n) {
 }
 const inputCols = (sh) => sh.cols.filter((c) => c.type !== 'auto');
 
-module.exports = { FIRST_ROW, LAST_ROW, SHEETS, MASTERS, ROLES, colIndex, colLetter, inputCols };
+module.exports = { FIRST_ROW, LAST_ROW, SHEETS, MASTERS, MASTER_LISTS, ROLES, colIndex, colLetter, inputCols };
