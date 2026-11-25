@@ -5,7 +5,9 @@ const path = require('path');
 const ExcelJS = require('exceljs');
 const PDFDocument = require('pdfkit');
 
-const NAVY = '1E2A44', TEAL = '0F9D8A', MUTED = '667085', LINE = 'E3E7ED', ZEBRA = 'F6F8FB';
+const NAVY = '1A1A1D', TEAL = 'B8281F', MUTED = '667085', LINE = 'E3E7ED', ZEBRA = 'F6F8FB';
+const LOGO = path.join(__dirname, 'brand', 'logo.png');
+const LOGO_SMALL = require('fs').readFileSync(path.join(__dirname, 'brand', 'logo-160.png'));
 const FONT = { r: path.join(__dirname, 'fonts', 'IBMPlexSans-Regular.woff'), b: path.join(__dirname, 'fonts', 'IBMPlexSans-SemiBold.woff') };
 // Indian grouping (₹12,34,567) in Excel
 const INR_FMT = '[>=10000000]"₹"#\\,##\\,##\\,##0;[>=100000]"₹"#\\,##\\,##0;"₹"#,##0';
@@ -41,10 +43,14 @@ async function toExcel(payload, meta) {
     let n = 2; while (used.has(name)) name = name.slice(0, 28) + ' ' + n++;
     used.add(name);
     const ws = wb.addWorksheet(name, { views: [{ state: 'frozen', ySplit: 4 }] });
-    ws.getCell('A1').value = p.title + (s.heading && s.heading !== p.title ? ` · ${s.heading}` : '');
-    ws.getCell('A1').font = { name: 'Arial', size: 14, bold: true, color: { argb: 'FF' + NAVY } };
-    ws.getCell('A2').value = [p.subtitle, `${meta.showroom} · exported ${meta.when} by ${meta.user}`].filter(Boolean).join('   ·   ');
-    ws.getCell('A2').font = { name: 'Arial', size: 9, color: { argb: 'FF' + MUTED } };
+    // dealer logo in A1:A2; the title and subtitle start in column B beside it
+    if (!wb._logo) wb._logo = wb.addImage({ buffer: LOGO_SMALL, extension: 'png' });
+    ws.getRow(1).height = 24; ws.getRow(2).height = 20;
+    ws.addImage(wb._logo, { tl: { col: 0.04, row: 0.08 }, ext: { width: 50, height: 50 }, editAs: 'absolute' });
+    ws.getCell('B1').value = p.title + (s.heading && s.heading !== p.title ? ` · ${s.heading}` : '');
+    ws.getCell('B1').font = { name: 'Arial', size: 14, bold: true, color: { argb: 'FF' + NAVY } };
+    ws.getCell('B2').value = [p.subtitle, `${meta.showroom} · exported ${meta.when} by ${meta.user}`].filter(Boolean).join('   ·   ');
+    ws.getCell('B2').font = { name: 'Arial', size: 9, color: { argb: 'FF' + MUTED } };
     const head = ws.getRow(4);
     s.columns.forEach((c, i) => {
       const cell = head.getCell(i + 1);
@@ -95,9 +101,15 @@ function toPdf(payload, meta) {
   const bottom = () => doc.page.height - 50;
 
   // report header (first page)
-  doc.font('b').fontSize(9).fillColor('#' + TEAL).text(meta.showroom, X0, 36);
-  doc.font('b').fontSize(17).fillColor('#' + NAVY).text(p.title, X0, 50, { width: W });
-  if (p.subtitle) doc.font('r').fontSize(9.5).fillColor('#' + MUTED).text(p.subtitle, { width: W });
+  // letterhead: logo, dealer name, report title
+  const LS = 54, TX = X0 + LS + 12;
+  doc.image(LOGO, X0, 30, { width: LS, height: LS });
+  doc.font('b').fontSize(9).fillColor('#' + TEAL).text(meta.showroom, TX, 34);
+  doc.font('b').fontSize(17).fillColor('#' + NAVY).text(p.title, TX, 47, { width: W - LS - 12 });
+  if (p.subtitle) doc.font('r').fontSize(9.5).fillColor('#' + MUTED).text(p.subtitle, TX, doc.y, { width: W - LS - 12 });
+  doc.y = Math.max(doc.y, 30 + LS + 4);
+  doc.moveTo(X0, doc.y + 4).lineTo(X0 + W, doc.y + 4).lineWidth(1.5).strokeColor('#' + TEAL).stroke();
+  doc.y += 6;
   doc.moveDown(0.8);
 
   for (const s of p.sections) {
@@ -155,7 +167,7 @@ function toPdf(payload, meta) {
       if (opts.bold) doc.moveTo(X0, y).lineTo(X0 + W, y).lineWidth(0.8).strokeColor('#' + NAVY).stroke();
       let x = X0;
       texts.forEach((t, i) => {
-        doc.fillColor('#1E2A44').text(t, x + pad, y + pad, { width: widths[i] - pad * 2, align: align(cols[i]) });
+        doc.fillColor('#' + NAVY).text(t, x + pad, y + pad, { width: widths[i] - pad * 2, align: align(cols[i]) });
         x += widths[i];
       });
       doc.moveTo(X0, y + h).lineTo(X0 + W, y + h).lineWidth(0.4).strokeColor('#' + LINE).stroke();

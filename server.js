@@ -10,7 +10,7 @@ const { Accounts, MODULES, LEVELS, rank } = require('./accounts');
 const { toExcel, toPdf } = require('./export');
 
 const PORT = process.env.PORT || 3000;
-const SHOWROOM = process.env.SHOWROOM_NAME || 'Royal Enfield Showroom';
+const SHOWROOM = process.env.SHOWROOM_NAME || 'Pradhanaa Motors LLP';
 const SESSION_HOURS = 12;
 
 const { store, demo } = makeStore();
@@ -171,7 +171,7 @@ app.post('/api/access/roles', sameOrigin, admin, json((req) => accounts.saveRole
 app.delete('/api/access/roles/:id', sameOrigin, admin, json((req) => { accounts.deleteRole(req.params.id); }));
 
 // ---------- static UI ----------
-const PUBLIC = { '/app.js': 'app.js', '/icons.js': 'icons.js', '/style.css': 'style.css' };   // only these files are served
+const PUBLIC = { '/app.js': 'app.js', '/icons.js': 'icons.js', '/style.css': 'style.css', '/brand/logo.png': 'brand/logo.png', '/favicon.png': 'brand/favicon.png', '/apple-touch-icon.png': 'brand/apple-touch-icon.png' };   // only these files are served
 // Each deploy gets its own version tag, so browsers never mix an old script with a new page.
 const BUILD = (process.env.RAILWAY_GIT_COMMIT_SHA || String(Date.now())).slice(0, 12);
 const INDEX = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8')

@@ -75,8 +75,9 @@
 
   // ---------- sign in / first setup / new password ----------
   function authCard(inner) {
-    $app.innerHTML = `<div class="login"><div class="login-side"><div class="login-brand">${esc(S.showroom || 'Royal Enfield Showroom')}</div>
-      <p>Stock, bookings, sales, service and accounts for the showroom, in one place.</p></div>
+    $app.innerHTML = `<div class="login"><div class="login-side"><div class="login-logo"><img src="/brand/logo.png" alt="${esc(S.showroom || 'Pradhanaa Motors LLP')} logo"></div>
+      <div><div class="login-brand">${esc(S.showroom || 'Pradhanaa Motors LLP')}</div>
+      <p>Stock, bookings, sales, service and accounts for the showroom, in one place.</p></div></div>
       <div class="login-main"><div class="login-card">${inner}</div></div></div>`;
   }
   const pwField = (name, label, auto) => `<div class="field"><label for="${name}">${label}</label><div class="pw"><input id="${name}" name="${name}" type="password" autocomplete="${auto}" required><button type="button" class="icon-btn pw-eye" aria-label="Show password">${ic('eye')}</button></div></div>`;
@@ -183,7 +184,7 @@
     $app.innerHTML = `
       <div class="shell">
         <aside class="side" id="side">
-          <div class="side-brand"><b>${esc(S.showroom)}</b><span>Showroom manager</span></div>
+          <div class="side-brand"><img src="/brand/logo.png" alt=""><div><b>${esc(S.showroom)}</b><span>Royal Enfield dealer</span></div></div>
           <nav class="nav">${NAV.map(([sec, items]) => { const ok = items.filter((i) => navAllowed(i[3])); return ok.length ? (sec ? `<div class="sec">${sec}</div>` : '') + ok.map(([href, label, icon]) =>
             `<a href="${href}" class="${route.startsWith(href) ? 'on' : ''}">${ic(icon)}<span>${label}</span>${href === '#/approvals' && S.pendingCount ? `<span class="badge">${S.pendingCount}</span>` : ''}</a>`).join('') : ''; }).join('')}</nav>
           ${S.demo ? '<div class="side-note">Demo data: entries are not saved to the Google Sheet.</div>' : ''}
@@ -312,7 +313,7 @@
             <div class="panel-b" style="padding-top:8px">
             ${models.length ? `<ul class="rows">${models.map((m) => `<li><div class="who"><b>${esc(m.model)}</b><small>${m.available + m.allotted} in stock${m.allotted ? `, ${m.allotted} allotted` : ''}${m.waiting ? ` · <span style="color:${m.waiting > m.available ? 'var(--red-d)' : 'var(--amber-d)'}">${m.waiting} waiting</span>` : ''}</small></div>
               <div class="barline" style="display:grid;gap:4px">${bar(m.available + m.allotted, maxModel)}${m.waiting ? bar(m.waiting, maxModel, m.waiting > m.available ? 'red' : 'amber') : ''}</div></li>`).join('')}</ul>
-              <div class="muted" style="font-size:12.5px;margin-top:8px">Teal is stock, amber is customers waiting for a bike. Red means order more.</div>` : '<div class="empty-line">No bikes in stock and nobody waiting.</div>'}
+              <div class="muted" style="font-size:12.5px;margin-top:8px">Green is stock, amber is customers waiting for a bike. Red means order more.</div>` : '<div class="empty-line">No bikes in stock and nobody waiting.</div>'}
           </div></div>
 
           ${d.restricted ? '' : `<div class="panel"><div class="panel-h"><h3>Expenses</h3><small>${esc(monthName)}</small></div><div class="panel-b">

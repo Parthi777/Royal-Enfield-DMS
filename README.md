@@ -1,4 +1,4 @@
-# RE Showroom web app
+# Pradhanaa Motors LLP: Royal Enfield showroom web app
 
 A web app for the Royal Enfield showroom on top of the **RE Showroom Google Sheet**: vehicle stock, bookings, vehicle sales, service, expenses, bank entries, bank ledger and dashboard.
 
@@ -72,7 +72,7 @@ Without `GOOGLE_SERVICE_ACCOUNT_JSON` (or with `DEMO_MODE=true`), the app runs o
 |---|---|
 | `GOOGLE_SERVICE_ACCOUNT_JSON` | Service-account key for the Google Sheet (not needed in demo mode) |
 | `SHEET_ID` | ID of the RE Showroom Google Sheet |
-| `SHOWROOM_NAME` | Name shown in the app and on reports |
+| `SHOWROOM_NAME` | Name shown in the app and on reports (default: Pradhanaa Motors LLP) |
 | `DATA_DIR` | Where accounts are saved (default `/data` if it exists) |
 | `SESSION_SECRET` | Optional; otherwise one is generated and kept with the accounts |
 | `DEMO_MODE` | `true` = sample data |
@@ -87,3 +87,4 @@ Without `GOOGLE_SERVICE_ACCOUNT_JSON` (or with `DEMO_MODE=true`), the app runs o
 - `store.js`: Google Sheets access (or demo data)
 - `index.html`, `app.js`, `style.css`, `icons.js`: the web pages ([Lucide](https://lucide.dev) icons, ISC licence)
 - `fonts/`: IBM Plex Sans, used in the PDFs (SIL Open Font Licence)
+- `brand/`: Pradhanaa Motors logo, used in the app, browser tab and reports
