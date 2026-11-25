@@ -1,0 +1,163 @@
+// Column map of the RE Showroom Google Sheet. Data rows run 3..1002.
+// type: date | text | phone | money | list | engine | auto
+// list: key into the Masters lists (see MASTERS below)
+
+const FIRST_ROW = 3;
+const LAST_ROW = 1002;
+
+const SHEETS = {
+  stock: {
+    name: 'Vehicle Stock', title: 'Vehicle Stock', icon: 'bike', last: 'K', key: 'E',
+    cols: [
+      { c: 'A', label: 'Inward date', type: 'date', req: true },
+      { c: 'B', label: 'Model', type: 'list', list: 'models', req: true },
+      { c: 'C', label: 'Variant', type: 'list', list: 'variants' },
+      { c: 'D', label: 'Colour', type: 'list', list: 'colours' },
+      { c: 'E', label: 'Engine no', type: 'text', req: true, unique: true },
+      { c: 'F', label: 'Frame no', type: 'text', req: true },
+      { c: 'G', label: 'Purchase value', type: 'money', req: true },
+      { c: 'H', label: 'Status', type: 'auto', status: true },
+      { c: 'I', label: 'Allotted / sold to', type: 'auto' },
+      { c: 'J', label: 'Days in stock', type: 'auto' },
+      { c: 'K', label: 'Check', type: 'auto', check: true },
+    ],
+    list: ['A', 'B', 'C', 'D', 'E', 'G', 'H', 'I', 'J'],
+  },
+  bookings: {
+    name: 'Bookings', title: 'Bookings', icon: 'calendar', last: 'P', key: 'B',
+    cols: [
+      { c: 'A', label: 'Booking date', type: 'date', req: true },
+      { c: 'B', label: 'Customer name', type: 'text', req: true },
+      { c: 'C', label: 'Mobile no', type: 'phone', req: true },
+      { c: 'D', label: 'Model', type: 'list', list: 'models', req: true },
+      { c: 'E', label: 'Variant', type: 'list', list: 'variants' },
+      { c: 'F', label: 'Colour', type: 'list', list: 'colours' },
+      { c: 'G', label: 'Booking amount', type: 'money' },
+      { c: 'H', label: 'Received in', type: 'list', list: 'accounts' },
+      { c: 'I', label: 'Commitment date', type: 'date' },
+      { c: 'J', label: 'Allotted engine no', type: 'engine', engineFor: 'booking' },
+      { c: 'K', label: 'Allotment', type: 'auto', status: true },
+      { c: 'L', label: 'Stock for model', type: 'auto' },
+      { c: 'M', label: 'Delivery', type: 'auto', status: true },
+      { c: 'N', label: 'Days left', type: 'auto' },
+      { c: 'O', label: 'Alert', type: 'auto', status: true },
+      { c: 'P', label: 'Check', type: 'auto', check: true },
+    ],
+    list: ['A', 'B', 'C', 'D', 'G', 'I', 'J', 'K', 'O'],
+  },
+  sales: {
+    name: 'Vehicle Sales', title: 'Vehicle Sales', icon: 'receipt', last: 'AL', key: 'B',
+    groups: [
+      { title: 'Customer & bike', cols: ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J'] },
+      { title: 'Vehicle cost', cols: ['K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R'] },
+      { title: 'Customer payments', cols: ['S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', 'AA'] },
+      { title: 'Finance DD (HP only)', cols: ['AB', 'AC', 'AD', 'AE'], hpOnly: true },
+      { title: 'Tally', cols: ['AF', 'AG', 'AH', 'AI', 'AJ', 'AK', 'AL'] },
+    ],
+    cols: [
+      { c: 'A', label: 'Sales date', type: 'date', req: true },
+      { c: 'B', label: 'Customer name', type: 'text', req: true },
+      { c: 'C', label: 'Mobile no', type: 'phone', req: true },
+      { c: 'D', label: 'Engine no', type: 'engine', engineFor: 'sale', req: true },
+      { c: 'E', label: 'Model', type: 'auto' },
+      { c: 'F', label: 'Variant', type: 'auto' },
+      { c: 'G', label: 'Colour', type: 'auto' },
+      { c: 'H', label: 'Chassis no', type: 'auto' },
+      { c: 'I', label: 'Purchase mode', type: 'list', list: 'modes', req: true },
+      { c: 'J', label: 'Financier', type: 'list', list: 'financiers', hpOnly: true },
+      { c: 'K', label: 'Ex-showroom', type: 'money', req: true },
+      { c: 'L', label: 'Insurance', type: 'money' },
+      { c: 'M', label: 'RTO / registration', type: 'money' },
+      { c: 'N', label: 'Accessories', type: 'money' },
+      { c: 'O', label: 'Other charges', type: 'money' },
+      { c: 'P', label: 'Discount', type: 'money' },
+      { c: 'Q', label: 'Total vehicle cost', type: 'auto', money: true },
+      { c: 'R', label: 'Booking advance', type: 'auto', money: true },
+      { c: 'S', label: 'Payment 1', type: 'money' },
+      { c: 'T', label: 'Payment 1 date', type: 'date' },
+      { c: 'U', label: 'Payment 1 received in', type: 'list', list: 'accounts' },
+      { c: 'V', label: 'Payment 2', type: 'money' },
+      { c: 'W', label: 'Payment 2 date', type: 'date' },
+      { c: 'X', label: 'Payment 2 received in', type: 'list', list: 'accounts' },
+      { c: 'Y', label: 'Payment 3', type: 'money' },
+      { c: 'Z', label: 'Payment 3 date', type: 'date' },
+      { c: 'AA', label: 'Payment 3 received in', type: 'list', list: 'accounts' },
+      { c: 'AB', label: 'DD sanctioned', type: 'money', hpOnly: true },
+      { c: 'AC', label: 'DD received', type: 'money', hpOnly: true },
+      { c: 'AD', label: 'DD received date', type: 'date', hpOnly: true },
+      { c: 'AE', label: 'DD received in', type: 'list', list: 'accounts', hpOnly: true },
+      { c: 'AF', label: 'Customer paid', type: 'auto', money: true },
+      { c: 'AG', label: 'Total received', type: 'auto', money: true },
+      { c: 'AH', label: 'DD pending', type: 'auto', money: true },
+      { c: 'AI', label: 'Customer balance', type: 'auto', money: true },
+      { c: 'AJ', label: 'Payment status', type: 'auto', status: true },
+      { c: 'AK', label: 'Booking type', type: 'auto' },
+      { c: 'AL', label: 'Check', type: 'auto', check: true },
+    ],
+    list: ['A', 'B', 'C', 'E', 'I', 'Q', 'AI', 'AH', 'AJ'],
+  },
+  service: {
+    name: 'Service', title: 'Service', icon: 'wrench', last: 'G', key: 'B',
+    cols: [
+      { c: 'A', label: 'Date', type: 'date', req: true },
+      { c: 'B', label: 'Customer name', type: 'text', req: true },
+      { c: 'C', label: 'Vehicle no', type: 'text' },
+      { c: 'D', label: 'Service type', type: 'list', list: 'serviceTypes', req: true },
+      { c: 'E', label: 'Bill value', type: 'money' },
+      { c: 'F', label: 'Received in', type: 'list', list: 'accounts' },
+      { c: 'G', label: 'Check', type: 'auto', check: true },
+    ],
+    list: ['A', 'B', 'C', 'D', 'E', 'F', 'G'],
+  },
+  expenses: {
+    name: 'Expenses', title: 'Expenses', icon: 'wallet', last: 'I', key: 'B',
+    cols: [
+      { c: 'A', label: 'Date', type: 'date', req: true },
+      { c: 'B', label: 'Particulars', type: 'text', req: true },
+      { c: 'C', label: 'Entry type', type: 'list', list: 'entryTypes', req: true },
+      { c: 'D', label: 'Category', type: 'list', list: 'expenseCats', req: true },
+      { c: 'E', label: 'Account', type: 'list', list: 'accounts', req: true },
+      { c: 'F', label: 'Received', type: 'money' },
+      { c: 'G', label: 'Paid', type: 'money' },
+      { c: 'H', label: 'Running balance', type: 'auto', money: true },
+      { c: 'I', label: 'Check', type: 'auto', check: true },
+    ],
+    list: ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'I'],
+  },
+  bank: {
+    name: 'Bank Entries', title: 'Bank Entries', icon: 'bank', last: 'H', key: 'C',
+    cols: [
+      { c: 'A', label: 'Date', type: 'date', req: true },
+      { c: 'B', label: 'Account', type: 'list', list: 'accounts', req: true },
+      { c: 'C', label: 'Particulars', type: 'text', req: true },
+      { c: 'D', label: 'Type', type: 'list', list: 'bankTypes', req: true },
+      { c: 'E', label: 'Credit / in', type: 'money' },
+      { c: 'F', label: 'Debit / out', type: 'money' },
+      { c: 'G', label: 'Contra account', type: 'list', list: 'accounts' },
+      { c: 'H', label: 'Check', type: 'auto', check: true },
+    ],
+    list: ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'],
+  },
+};
+
+// Masters tab: column -> list name
+const MASTERS = {
+  A: 'models', B: 'variants', C: 'colours', D: 'financiers', E: 'expenseCats', F: 'modes',
+  G: 'serviceTypes', H: 'entryTypes', I: 'accounts', J: 'opening', K: 'bankTypes',
+};
+
+const ROLES = ['Admin', 'Manager', 'Staff', 'Viewer'];
+
+function colIndex(letter) {
+  let n = 0;
+  for (const ch of letter) n = n * 26 + (ch.charCodeAt(0) - 64);
+  return n;
+}
+function colLetter(n) {
+  let s = '';
+  while (n > 0) { const m = (n - 1) % 26; s = String.fromCharCode(65 + m) + s; n = Math.floor((n - 1) / 26); }
+  return s;
+}
+const inputCols = (sh) => sh.cols.filter((c) => c.type !== 'auto');
+
+module.exports = { FIRST_ROW, LAST_ROW, SHEETS, MASTERS, ROLES, colIndex, colLetter, inputCols };

@@ -1,0 +1,19 @@
+{
+  "name": "re-showroom-app",
+  "version": "1.0.0",
+  "description": "Royal Enfield showroom web app on top of the RE Showroom Google Sheet",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "demo": "DEMO_MODE=true node server.js"
+  },
+  "dependencies": {
+    "express": "^4.22.3",
+    "google-auth-library": "^9.15.1",
+    "googleapis": "^144.0.0"
+  },
+  "private": true,
+  "engines": {
+    "node": ">=20"
+  }
+}
