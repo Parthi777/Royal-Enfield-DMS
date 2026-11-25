@@ -5,6 +5,7 @@
 const fs = require('fs');
 const path = require('path');
 const { colIndex } = require('./schema');
+const { recompute } = require('./demo-calc');
 
 function parseA1(a1) {
   // 'Vehicle Sales'!A3:AL1002  or  Users!A3
@@ -46,6 +47,7 @@ class GoogleStore {
 class MemoryStore {
   constructor(file) {
     this.grid = JSON.parse(fs.readFileSync(file, 'utf8'));   // { sheet: { "row": [values from col A] } }
+    recompute(this.grid);   // fill the computed columns the way the sheet's formulas would
     this.email = 'demo-mode';
   }
   async get(ranges) {
@@ -75,6 +77,7 @@ class MemoryStore {
         });
       });
     }
+    recompute(this.grid);
   }
 }
 

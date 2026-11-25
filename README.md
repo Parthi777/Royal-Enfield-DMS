@@ -51,29 +51,53 @@ Users and roles are saved in `accounts.json` in the app's data folder.
 - **Edit Log:** every change is recorded there.
 - **Access:** set it per role under Users & Roles (No access, View or Edit). The Admin always has Edit.
 
+## Customer payments (Sale Payments)
+
+A sale can take any number of payments. In the sale form, **Customer payments → Add payment** adds a row: date, amount, account (Cash in Hand or a bank) and the UTR for bank payments. Saving the sale saves the payments too. Each payment is one row in the **Sale Payments** tab, linked to the sale by engine number, and can also be added later from the Sale Payments page.
+
+- Customer paid (Vehicle Sales, AF) = booking advance + every payment for that engine.
+- Each payment shows in the bank ledger and the day book under its own date and account.
+
 ## Payment reference (UTR)
 
-When a customer pays into a bank account (GPay, UPI, NEFT, card), the form asks for the **UTR / reference no** next to that payment:
+When a customer pays into a bank account (GPay, UPI, NEFT, card), the form asks for the **UTR / reference no**:
 
-- the booking advance (Bookings, column Q)
-- payments 1–3 (Vehicle Sales, columns AM, AN and AO)
-- the service bill (Service, column H)
+- the booking advance (Bookings, column P)
+- each sale payment (Sale Payments, column F)
+- the service bill (Service, column G)
 
-Cash payments don't need one. The UTR also shows in the bank ledger particulars.
+Cash payments don't need one. The UTR also shows in the bank ledger and day book particulars.
+
+## Day Book
+
+**Day Book** shows one day at a time: every receipt (money in) and payment (money out) with its account, then cash in hand and bank accounts with opening balance, received, paid and closing balance, and the same for each account. Use the arrows or the date box to move between days. Exports to Excel and PDF.
+
+## Dashboard
+
+- **Today:** sales, bookings, service, collections; then cash opening and closing, bank opening and closing, bank deposits and expenses.
+- **This month:** the same figures for the month so far.
+- **Below:** the cash and bank account table, then charts (money in and out by day, follow-ups, bikes sold, stock, expenses, sales mix).
+
+Roles without Bank Ledger access see the sales and bookings figures only.
+
+## Stock status
+
+A booking with an engine number marks that bike **Allotted** in Vehicle Stock; a sale marks it **Sold** and the booking **Delivered**. The sheet's old Check columns were removed: the app refuses those entries instead (see below).
 
 ## Checks on entries
 
 - **Dates:** impossible dates such as 31 Feb are refused.
-- **Sheet checks:** the app refuses what the sheet's Check column would flag:
+- **Refused entries:**
   - a Receipt with a Paid amount, or an Expense with a Received amount
   - an expense or bank entry with no amount
   - a commitment date before the booking date
+  - a payment for a bike that hasn't been sold, or a bank payment without its UTR
 - **Confirmations:** amounts far above normal ask before saving, for example a booking advance over ₹5 lakh. So do sales payments above the vehicle cost.
 - **Edit requests:** an approval can be withdrawn, and a rejected request can't be reopened.
 
 ## Excel and PDF reports
 
-Every list has **Export → Excel / PDF**: stock, bookings, sales, service, expenses, bank entries, bank ledger statement, edit requests, users and roles, and the dashboard daily report.
+Every list has **Export → Excel / PDF**: stock, bookings, sales, sale payments, service, expenses, bank entries, bank ledger statement, day book, edit requests, users and roles, and the dashboard daily report.
 
 - The export follows the current filter and search.
 - Excel files have every column, with ₹ amounts in Indian format, dates, filters and totals.

@@ -292,7 +292,7 @@ class DataService {
         if (cur[c] !== '') locked.push(c);
       }
       if (!Object.keys(changed).length) return { row, changed: 0 };
-      if (locked.length && user.perms?.[key] !== 'edit') {
+      if (locked.length && user.perms?.[sh.perm || key] !== 'edit') {
         const ok = await this.approvalFor(sh.name, row, user.email);
         if (!ok) throw httpError(403, 'Saved values are locked. Send an edit request to the Admin first.');
       }
@@ -307,8 +307,14 @@ class DataService {
   }
 
   async context() {
-    const [{ lists }, engines] = await Promise.all([this.masters(), this.engines()]);
-    return { lists, engines };
+    const [{ lists }, engines, sales] = await Promise.all([this.masters(), this.engines(), this.rows('sales')]);
+    return { lists, engines, sold: new Set(sales.filter((r) => r.D !== '').map((r) => String(r.D))) };
+  }
+
+  // engines of saved sales, for the Sale Payments form
+  async soldList() {
+    const sales = await this.rows('sales');
+    return sales.filter((r) => r.D !== '').map((r) => ({ engine: String(r.D), customer: r.B, model: r.E, date: r.A, row: r._row }));
   }
 
   // normalise + validate the input fields of one row
@@ -333,6 +339,8 @@ class DataService {
           if (v.length !== 10) throw httpError(400, `${col.label}: mobile number must be 10 digits`);
         } else if (col.type === 'list') {
           if (!(ctx.lists[col.list] || []).map(String).includes(v)) throw httpError(400, `${col.label}: pick from the list`);
+        } else if (col.type === 'sold') {
+          if (!ctx.sold.has(v)) throw httpError(400, `${col.label}: pick the engine no of a saved sale`);
         } else if (col.type === 'engine') {
           if (!ctx.engines.some((e) => e.engine === v)) throw httpError(400, `${col.label}: engine not in Vehicle Stock`);
         } else {
@@ -372,9 +380,6 @@ class DataService {
       if (v.D && others.some((r) => String(r.D) === v.D)) throw httpError(400, 'This engine is already sold');
       if (v.I === 'Cash' && (v.J || Number(v.AB) > 0 || Number(v.AC) > 0)) throw httpError(400, 'Cash sale: leave financier and DD empty');
       if (v.I === 'HP' && !v.J) throw httpError(400, 'HP sale: pick the financier');
-      for (const [a, d, acc, n] of [['S', 'T', 'U', 1], ['V', 'W', 'X', 2], ['Y', 'Z', 'AA', 3]]) {
-        if (Number(v[a]) > 0 && (!v[d] || !v[acc])) throw httpError(400, `Payment ${n} needs a date and account`);
-      }
       if (Number(v.AC) > 0 && (!v.AD || !v.AE)) throw httpError(400, 'DD received needs a date and account');
     }
     if (key === 'bank') {
@@ -394,76 +399,148 @@ class DataService {
   }
 
   // ---------- bank ledger (same rules as the sheet) ----------
+  // every money movement, one line per account side. kind: receipt | payment | contra
   async ledger() {
-    const [{ lists, opening }, bk, sl, sv, ex, be] = await Promise.all([
-      this.masters(), this.rows('bookings'), this.rows('sales'), this.rows('service'), this.rows('expenses'), this.rows('bank'),
+    const [{ lists, opening }, bk, sl, sp, sv, ex, be] = await Promise.all([
+      this.masters(), this.rows('bookings'), this.rows('sales'), this.rows('payments'), this.rows('service'), this.rows('expenses'), this.rows('bank'),
     ]);
     const lines = [];
-    const add = (date, account, inAmt, outAmt, text, from) => {
+    let seq = 0;
+    const add = (date, account, inAmt, outAmt, text, from, kind, ref) => {
       if (!account || !date || (!inAmt && !outAmt)) return;
-      lines.push({ date, account, in: inAmt || 0, out: outAmt || 0, text, from });
+      lines.push({ date, account, in: inAmt || 0, out: outAmt || 0, text, from, kind, ref, seq: seq++ });
     };
     const utr = (x) => (x ? ` · UTR ${x}` : '');
-    bk.forEach((r) => add(r.A, r.H, +r.G || 0, 0, `Booking advance – ${r.B} (${r.D})${utr(r.Q)}`, `Bookings · row ${r._row}`));
-    sl.forEach((r) => {
-      add(r.T, r.U, +r.S || 0, 0, `Payment 1 – ${r.B} (${r.E})${utr(r.AM)}`, `Vehicle Sales · row ${r._row}`);
-      add(r.W, r.X, +r.V || 0, 0, `Payment 2 – ${r.B} (${r.E})${utr(r.AN)}`, `Vehicle Sales · row ${r._row}`);
-      add(r.Z, r.AA, +r.Y || 0, 0, `Payment 3 – ${r.B} (${r.E})${utr(r.AO)}`, `Vehicle Sales · row ${r._row}`);
-      add(r.AD, r.AE, +r.AC || 0, 0, `DD received – ${r.B} (${r.J})`, `Vehicle Sales · row ${r._row}`);
-    });
-    sv.forEach((r) => add(r.A, r.F, +r.E || 0, 0, `Service – ${r.B} ${r.C}`.trim() + utr(r.H), `Service · row ${r._row}`));
-    ex.forEach((r) => add(r.A, r.E, +r.F || 0, +r.G || 0, `${r.B} [${r.D}]`, `Expenses · row ${r._row}`));
+    bk.forEach((r) => add(r.A, r.H, +r.G || 0, 0, `Booking advance – ${r.B} (${r.D})${utr(r.P)}`, `Bookings · row ${r._row}`, 'receipt', ['bookings', r._row]));
+    sp.forEach((r) => add(r.A, r.E, +r.D || 0, 0, `Sale payment – ${r.C || ''} (${r.B})${utr(r.F)}${r.G ? ' · ' + r.G : ''}`, `Sale Payments · row ${r._row}`, 'receipt', ['payments', r._row]));
+    sl.forEach((r) => add(r.AD, r.AE, +r.AC || 0, 0, `Finance DD – ${r.B} (${r.J || 'HP'})`, `Vehicle Sales · row ${r._row}`, 'receipt', ['sales', r._row]));
+    sv.forEach((r) => add(r.A, r.F, +r.E || 0, 0, `Service – ${r.B} ${r.C}`.trim() + utr(r.G), `Service · row ${r._row}`, 'receipt', ['service', r._row]));
+    ex.forEach((r) => add(r.A, r.E, +r.F || 0, +r.G || 0, `${r.B} [${r.D}]`, `Expenses · row ${r._row}`, +r.F > 0 ? 'receipt' : 'payment', ['expenses', r._row]));
     be.forEach((r) => {
-      add(r.A, r.B, +r.E || 0, +r.F || 0, `${r.C} [${r.D}]`, `Bank Entries · row ${r._row}`);
-      if (r.G) add(r.A, r.G, +r.F || 0, +r.E || 0, `${r.C} [${r.D}] · contra ${r.B}`, `Bank Entries · row ${r._row}`);
+      const kind = r.G ? 'contra' : +r.E > 0 ? 'receipt' : 'payment';
+      add(r.A, r.B, +r.E || 0, +r.F || 0, `${r.C} [${r.D}]`, `Bank Entries · row ${r._row}`, kind, ['bank', r._row]);
+      if (r.G) add(r.A, r.G, +r.F || 0, +r.E || 0, `${r.C} [${r.D}] · contra ${r.B}`, `Bank Entries · row ${r._row}`, 'contra', ['bank', r._row]);
     });
-    lines.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+    lines.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : a.seq - b.seq));
     const accounts = lists.accounts.map((a) => {
       const own = lines.filter((l) => l.account === a);
       let bal = opening[a] || 0;
       const rows = own.map((l) => ({ ...l, balance: (bal += l.in - l.out) }));
       return {
-        account: a, opening: opening[a] || 0,
+        account: a, cash: isCash(a), opening: opening[a] || 0,
         received: own.reduce((s, l) => s + l.in, 0), paid: own.reduce((s, l) => s + l.out, 0),
         closing: bal, lines: rows,
       };
     });
     const unposted = [
       ...bk.filter((r) => +r.G > 0 && !r.H).map((r) => +r.G),
-      ...sl.flatMap((r) => [[r.S, r.U], [r.V, r.X], [r.Y, r.AA], [r.AC, r.AE]].filter(([a, acc]) => +a > 0 && !acc).map(([a]) => +a)),
+      ...sp.filter((r) => +r.D > 0 && !r.E).map((r) => +r.D),
+      ...sl.filter((r) => +r.AC > 0 && !r.AE).map((r) => +r.AC),
       ...sv.filter((r) => +r.E > 0 && !r.F).map((r) => +r.E),
     ].reduce((s, x) => s + x, 0);
     return { accounts, unposted };
   }
 
-  // ---------- dashboard (values computed by the sheet's own formulas) ----------
+  // balance of each account at the start and end of a period, and what moved in between
+  static balances(accounts, from, to) {
+    return accounts.map((a) => {
+      const before = a.lines.filter((l) => l.date < from), inside = a.lines.filter((l) => l.date >= from && l.date <= to);
+      const open = a.opening + before.reduce((s, l) => s + l.in - l.out, 0);
+      const inn = inside.reduce((s, l) => s + l.in, 0), out = inside.reduce((s, l) => s + l.out, 0);
+      return { account: a.account, cash: a.cash, opening: open, received: inn, paid: out, closing: open + inn - out };
+    });
+  }
+
+  // ---------- day book: every entry of one day, with opening and closing cash and bank ----------
+  async daybook(date) {
+    const { accounts } = await this.ledger();
+    const bal = DataService.balances(accounts, date, date);
+    const entries = accounts.flatMap((a) => a.lines.filter((l) => l.date === date).map((l) => ({ ...l, cash: a.cash })))
+      .sort((x, y) => x.seq - y.seq || (x.in ? -1 : 1));
+    const sum = (list, k) => list.reduce((s, x) => s + x[k], 0);
+    const group = (cash) => { const g = bal.filter((b) => b.cash === cash); return { opening: sum(g, 'opening'), received: sum(g, 'received'), paid: sum(g, 'paid'), closing: sum(g, 'closing') }; };
+    return { date, entries, accounts: bal, cash: group(true), bank: group(false) };
+  }
+
+  // ---------- dashboard: worked out from the entries themselves ----------
   async dashboard() {
-    const [grid, d6] = await this.get([`Dashboard!B8:M160`, `Dashboard!D6`]);
-    const cell = (r, c) => { const v = grid[r - 8]?.[colIndex(c) - 2]; return isEmpty(v) ? '' : v; };
-    const tile = (r, c) => ({ label: cell(r, c), value: cell(r + 1, c), sub: cell(r + 2, c) });
-    const card = (r, c) => ({ label: cell(r, c), value: cell(r + 1, c), sub: cell(r + 3, c) });
-    const range = (r1, r2, fn) => { const o = []; for (let r = r1; r <= r2; r++) { const x = fn(r); if (x) o.push(x); } return o; };
-    const money = new Set(['SERVICE AMOUNT', 'SALES VALUE (ON-ROAD)', 'BANK DEPOSIT', 'BANK TRANSFER', 'OPENING BALANCE', 'CLOSING BALANCE', 'STOCK VALUE']);
-    const today = [...['B', 'D', 'F', 'H', 'J', 'L'].map((c) => tile(9, c)), ...['B', 'D', 'F', 'H', 'J', 'L'].map((c) => tile(13, c))]
-      .map((t) => ({ ...t, money: money.has(t.label) }));
-    const month = [...['B', 'E', 'H', 'K'].map((c) => card(18, c)), ...['B', 'E', 'H', 'K'].map((c) => card(23, c))]
-      .map((t) => ({ ...t, money: !/SOLD|BOOKINGS/.test(t.label) }));
+    const [{ lists }, st, bk, sl, sp, sv, ex, be, L] = await Promise.all([
+      this.masters(), this.rows('stock'), this.rows('bookings'), this.rows('sales'), this.rows('payments'),
+      this.rows('service'), this.rows('expenses'), this.rows('bank'), this.ledger(),
+    ]);
+    const today = todayIst(), month = today.slice(0, 7), mStart = `${month}-01`;
+    const inDay = (d) => d === today, inMonth = (d) => typeof d === 'string' && d.slice(0, 7) === month && d <= today;
+    const sum = (list, f) => list.reduce((s, x) => s + (Number(f(x)) || 0), 0);
+    const group = (bal, cash) => { const g = bal.filter((b) => b.cash === cash); return { opening: sum(g, (b) => b.opening), received: sum(g, (b) => b.received), paid: sum(g, (b) => b.paid), closing: sum(g, (b) => b.closing) }; };
+
+    const period = (pick, from) => {
+      const sales = sl.filter((r) => pick(r.A)), books = bk.filter((r) => pick(r.A)), svc = sv.filter((r) => pick(r.A));
+      const exps = ex.filter((r) => pick(r.A) && +r.G > 0);
+      const deposits = be.filter((r) => pick(r.A) && r.D === 'Cash Deposit');
+      const collections = sum(bk.filter((r) => pick(r.A)), (r) => r.G) + sum(sp.filter((r) => pick(r.A)), (r) => r.D)
+        + sum(sl.filter((r) => pick(r.AD)), (r) => r.AC) + sum(svc, (r) => r.E);
+      const bal = DataService.balances(L.accounts, from, today);
+      return {
+        sold: sales.length, hp: sales.filter((r) => r.I === 'HP').length, cashSales: sales.filter((r) => r.I === 'Cash').length,
+        salesValue: sum(sales, (r) => r.Q), bookings: books.length, advance: sum(books, (r) => r.G),
+        service: svc.length, serviceValue: sum(svc, (r) => r.E), collections,
+        expenses: sum(exps, (r) => r.G), expenseCount: exps.length,
+        deposit: sum(deposits, (r) => (+r.E || 0) + (+r.F || 0)), depositCount: deposits.length,
+        cash: group(bal, true), bank: group(bal, false), accounts: bal,
+      };
+    };
+    const T = period(inDay, today), M = period(inMonth, mStart);
+
+    // follow-up lists
+    const open = bk.filter((r) => r.M !== 'Delivered');
+    const overdue = open.filter((r) => r.I && r.I < today).map((r) => ({ customer: r.B, mobile: r.C, model: r.D, commitment: r.I, late: Math.round((Date.parse(today) - Date.parse(r.I)) / 864e5), advance: +r.G || 0 }))
+      .sort((a, b) => b.late - a.late);
+    const balances = sl.filter((r) => (+r.AI || 0) >= 0.5 || (+r.AH || 0) >= 0.5)
+      .map((r) => ({ customer: r.B, mobile: r.C, model: r.E, owes: Math.max(0, +r.AI || 0), dd: Math.max(0, +r.AH || 0), date: r.A }));
+
+    // last 6 months: bikes sold and money collected from customers
+    const months = [];
+    for (let k = 5; k >= 0; k--) {
+      const d = new Date(Date.UTC(+month.slice(0, 4), +month.slice(5, 7) - 1 - k, 1));
+      const ym = d.toISOString().slice(0, 7), pick = (x) => typeof x === 'string' && x.slice(0, 7) === ym;
+      months.push({ month: `${ym}-01`, sold: sl.filter((r) => pick(r.A)).length,
+        collections: sum(bk.filter((r) => pick(r.A)), (r) => r.G) + sum(sp.filter((r) => pick(r.A)), (r) => r.D) + sum(sl.filter((r) => pick(r.AD)), (r) => r.AC) + sum(sv.filter((r) => pick(r.A)), (r) => r.E) });
+    }
+    // money in and out per day this month (for the chart)
+    const days = [];
+    for (let d = 1; d <= +today.slice(8, 10); d++) {
+      const iso = `${month}-${String(d).padStart(2, '0')}`;
+      const ls = L.accounts.flatMap((a) => a.lines.filter((l) => l.date === iso && l.kind !== 'contra'));
+      days.push({ date: iso, in: sum(ls, (l) => l.in), out: sum(ls, (l) => l.out) });
+    }
+    // stock by model vs customers waiting
+    const models = lists.models.map((m) => ({
+      model: m,
+      available: st.filter((r) => r.B === m && r.H === 'Available').length,
+      allotted: st.filter((r) => r.B === m && r.H === 'Allotted').length,
+      sold: sl.filter((r) => r.E === m && inMonth(r.A)).length,
+      waiting: open.filter((r) => r.D === m && !r.J).length,
+    }));
+    const monthSales = sl.filter((r) => inMonth(r.A));
+    const mix = ['Cash', 'HP'].map((mode) => ({ mode, count: monthSales.filter((r) => r.I === mode).length }));
+    const financiers = [...new Set(monthSales.filter((r) => r.I === 'HP' && r.J).map((r) => r.J))]
+      .map((n) => ({ name: n, count: monthSales.filter((r) => r.J === n).length, dd: sum(monthSales.filter((r) => r.J === n), (r) => r.AB) }));
+    const expenses = [...new Set(ex.filter((r) => inMonth(r.A) && +r.G > 0).map((r) => r.D))]
+      .map((c) => ({ category: c, paid: sum(ex.filter((r) => inMonth(r.A) && r.D === c), (r) => r.G) })).sort((a, b) => b.paid - a.paid);
+    const instock = st.filter((r) => r.H === 'Available' || r.H === 'Allotted');
+    const ageing = [{ label: '0–30 days', bikes: instock.filter((r) => +r.J <= 30).length }, { label: '31–60 days', bikes: instock.filter((r) => +r.J > 30 && +r.J <= 60).length },
+      { label: '61–90 days', bikes: instock.filter((r) => +r.J > 60 && +r.J <= 90).length }, { label: 'Over 90 days', bikes: instock.filter((r) => +r.J > 90).length }];
+
     return {
-      reportDate: serialToIso(d6[0]?.[0]) || todayIst(),
-      today, month,
-      bank: range(30, 41, (r) => cell(r, 'B') && { account: cell(r, 'B'), opening: +cell(r, 'D') || 0, received: +cell(r, 'E') || 0, paid: +cell(r, 'F') || 0, closing: +cell(r, 'G') || 0 }),
-      bankTotal: { opening: +cell(42, 'D') || 0, received: +cell(42, 'E') || 0, paid: +cell(42, 'F') || 0, closing: +cell(42, 'G') || 0 },
-      monthly: range(46, 57, (r) => ({ month: serialToIso(cell(r, 'B')), sold: +cell(r, 'C') || 0, bookings: +cell(r, 'D') || 0, collections: +cell(r, 'E') || 0, service: +cell(r, 'G') || 0, expenses: +cell(r, 'H') || 0 })),
-      models: range(62, 81, (r) => cell(r, 'B') && { model: cell(r, 'B'), available: +cell(r, 'D') || 0, allotted: +cell(r, 'E') || 0, sold: +cell(r, 'F') || 0, waiting: +cell(r, 'G') || 0 }),
-      mix: range(86, 87, (r) => cell(r, 'B') && { mode: cell(r, 'B'), count: +cell(r, 'D') || 0 }),
-      financiers: range(86, 101, (r) => cell(r, 'G') && +cell(r, 'J') > 0 && { name: cell(r, 'G'), count: +cell(r, 'J') || 0, dd: +cell(r, 'K') || 0 }),
-      overdue: range(106, 120, (r) => cell(r, 'B') && { customer: cell(r, 'B'), mobile: cell(r, 'E'), model: cell(r, 'G'), commitment: serialToIso(cell(r, 'I')), late: +cell(r, 'K') || 0, advance: +cell(r, 'L') || 0 }),
-      balances: range(125, 139, (r) => cell(r, 'B') && { customer: cell(r, 'B'), mobile: cell(r, 'E'), model: cell(r, 'G'), owes: +cell(r, 'I') || 0, dd: +cell(r, 'K') || 0, date: serialToIso(cell(r, 'M')) }),
-      expenses: range(144, 156, (r) => cell(r, 'B') && +cell(r, 'E') > 0 && { category: cell(r, 'B'), paid: +cell(r, 'E') || 0 }),
-      ageing: range(144, 147, (r) => cell(r, 'I') && { label: cell(r, 'I'), bikes: +cell(r, 'K') || 0 }),
+      reportDate: today, today: T, month: M, unposted: L.unposted,
+      openBookings: open.length, allottedOpen: open.filter((r) => r.J).length,
+      customerDue: sum(balances, (b) => b.owes), ddPending: sum(balances, (b) => b.dd),
+      overdue, balances, months, days, models, mix, financiers, expenses, ageing,
     };
   }
 }
+
+const isCash = (a) => /cash/i.test(String(a));
 
 function pickInputs(sh, rec) {
   const o = {};

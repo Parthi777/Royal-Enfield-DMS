@@ -2,7 +2,7 @@
 (() => {
   'use strict';
   const $app = document.getElementById('app');
-  const S = { user: null, schema: {}, lists: {}, engines: [], demo: false, showroom: '', pendingCount: 0, data: {}, filter: {}, q: {} };
+  const S = { user: null, schema: {}, lists: {}, engines: [], sold: [], demo: false, showroom: '', pendingCount: 0, data: {}, filter: {}, q: {} };
 
   // ---------- helpers ----------
   const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -14,7 +14,9 @@
   // today's date in India (UTC + 5:30), whatever time zone the device is set to
   const todayIso = () => new Date(Date.now() + 330 * 60000).toISOString().slice(0, 10);
   const RANK = { none: 0, view: 1, add: 2, edit: 3 };
-  const canDo = (k, l) => RANK[S.user?.perms?.[k] || 'none'] >= RANK[l];
+  // a sheet's access comes from its own section, or the one it belongs to (Sale Payments -> Vehicle Sales)
+  const permOf = (k) => S.schema?.[k]?.perm || k;
+  const canDo = (k, l) => RANK[S.user?.perms?.[permOf(k)] || 'none'] >= RANK[l];
   const initials = (n) => String(n || '?').split(/[\s@.]+/).filter(Boolean).slice(0, 2).map((x) => x[0].toUpperCase()).join('');
 
   // Lucide icons (icons.js); old names kept as aliases
@@ -174,8 +176,8 @@
   // ---------- shell ----------
   const NAV = [
     ['', [['#/dashboard', 'Dashboard', 'dash', 'dashboard']]],
-    ['Showroom', [['#/s/stock', 'Vehicle Stock', 'stock', 'stock'], ['#/s/bookings', 'Bookings', 'bookings', 'bookings'], ['#/s/sales', 'Vehicle Sales', 'sales', 'sales'], ['#/s/service', 'Service', 'service', 'service']]],
-    ['Accounts', [['#/s/expenses', 'Expenses', 'expenses', 'expenses'], ['#/s/bank', 'Bank Entries', 'bank', 'bank'], ['#/ledger', 'Bank Ledger', 'ledger', 'ledger']]],
+    ['Showroom', [['#/s/stock', 'Vehicle Stock', 'stock', 'stock'], ['#/s/bookings', 'Bookings', 'bookings', 'bookings'], ['#/s/sales', 'Vehicle Sales', 'sales', 'sales'], ['#/s/payments', 'Sale Payments', 'payments', 'sales'], ['#/s/service', 'Service', 'service', 'service']]],
+    ['Accounts', [['#/s/expenses', 'Expenses', 'expenses', 'expenses'], ['#/s/bank', 'Bank Entries', 'bank', 'bank'], ['#/daybook', 'Day Book', 'daybook', 'ledger'], ['#/ledger', 'Bank Ledger', 'ledger', 'ledger']]],
     ['Control', [['#/approvals', 'Edit Requests', 'approvals', '@approvals'], ['#/masters', 'Masters', 'masters', 'masters'], ['#/access', 'Users & Roles', 'roles', '@users']]],
   ];
   const navAllowed = (k) => k === '@users' ? !!S.user.manageUsers
@@ -234,80 +236,87 @@
   async function pageDashboard() {
     loading('Dashboard');
     const d = await api('GET', '/api/dashboard');
-    const T = Object.fromEntries(d.today.map((x) => [x.label, num(x.value)]));
-    const M = Object.fromEntries(d.month.map((x) => [x.label, num(x.value)]));
+    const T = d.today, M = d.month;
     const rd = new Date(d.reportDate + 'T00:00:00');
     const longDate = rd.toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
     const monthName = rd.toLocaleDateString('en-IN', { month: 'long' });
+    const monthLong = rd.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
     const bar = (v, max, cls = '') => `<div class="bar ${cls}"><i style="width:${max > 0 ? Math.max(2, Math.min(100, (v / max) * 100)) : 0}%"></i></div>`;
     const stat = (label, value, sub = '', money = false) => {
       const z = num(value) === 0;
       return `<div class="st"><div class="l">${esc(label)}</div><div class="v ${z ? 'zero' : ''}">${money ? (z ? '₹0' : inr(value)) : num(value)}</div><div class="s">${sub || '&nbsp;'}</div></div>`;
     };
+    const delta = (a, b) => { const x = b - a; return x === 0 ? 'no change' : `<span class="${x > 0 ? 'in' : 'out'}">${x > 0 ? '+' : '−'}${inr(Math.abs(x), false)}</span> ${x > 0 ? 'more' : 'less'}`; };
+    const nBank = (T.accounts || []).filter((a) => !a.cash).length;
+
+    // business cards and money cards for one period (today or this month)
+    const business = (P, when) => `
+      <div class="panel strip" style="--n:5">
+        ${stat('Bikes sold', P.sold, `HP ${P.hp} · Cash ${P.cashSales}`)}
+        ${stat('Sales value', P.salesValue, 'on-road price', true)}
+        ${stat('New bookings', P.bookings, P.advance ? `${inr(P.advance, false)} advance` : 'no advance')}
+        ${stat('Service billed', P.serviceValue, `${P.service} ${P.service === 1 ? 'job' : 'jobs'}`, true)}
+        ${stat('Collections', P.collections, 'received from customers', true)}
+      </div>`;
+    const money = (P, openLabel) => d.restricted ? '' : `
+      <div class="panel strip money" style="--n:6">
+        ${stat('Cash opening', P.cash.opening, openLabel, true)}
+        ${stat('Cash closing', P.cash.closing, delta(P.cash.opening, P.cash.closing), true)}
+        ${stat('Bank opening', P.bank.opening, `${nBank} bank ${nBank === 1 ? 'account' : 'accounts'}`, true)}
+        ${stat('Bank closing', P.bank.closing, delta(P.bank.opening, P.bank.closing), true)}
+        ${stat('Bank deposit', P.deposit, P.depositCount ? `${P.depositCount} cash ${P.depositCount === 1 ? 'deposit' : 'deposits'}` : 'no deposits', true)}
+        ${stat('Expenses', P.expenses, P.expenseCount ? `${P.expenseCount} ${P.expenseCount === 1 ? 'payment' : 'payments'} out` : 'none', true)}
+      </div>`;
 
     // stock comes from the live engine list (Available + Allotted = in the showroom)
     const inStock = S.engines.filter((e) => e.status === 'Available' || e.status === 'Allotted');
     const allotted = inStock.filter((e) => e.status === 'Allotted');
     const stockValue = inStock.reduce((s, e) => s + num(e.value), 0);
-
-    const open = num(T['OPENING BALANCE']), close = num(T['CLOSING BALANCE']);
-    const change = close - open;
-    const ddPending = d.balances.reduce((s, b) => s + b.dd, 0);
-    const owes = d.balances.filter((b) => b.owes > 0);
-    const dds = d.balances.filter((b) => b.dd > 0);
-
-    // last 6 months up to the report month
-    const ym = d.reportDate.slice(0, 7);
-    const months = d.monthly.filter((m) => m.month.slice(0, 7) <= ym).slice(-6);
-    const maxSold = Math.max(0, ...months.map((m) => m.sold));
+    const owes = d.balances.filter((b) => b.owes > 0), dds = d.balances.filter((b) => b.dd > 0);
+    const maxSold = Math.max(0, ...d.months.map((m) => m.sold));
     const models = d.models.filter((m) => m.available + m.allotted + m.waiting > 0);
     const maxModel = Math.max(0, ...models.map((m) => Math.max(m.available + m.allotted, m.waiting)));
     const maxExp = Math.max(0, ...d.expenses.map((e) => e.paid));
     const old = d.ageing.slice(2).reduce((s, a) => s + a.bikes, 0);
+    const maxDay = Math.max(0, ...d.days.map((x) => Math.max(x.in, x.out)));
+    const accts = T.accounts || [];
 
     shell('Dashboard', esc(longDate), `<button class="btn" id="refresh">${ic('refresh')}<span class="new-label">Refresh</span></button>` + exportBtn(), `
-      ${d.restricted ? '' : `<section class="hero">
-        <div>
-          <div class="lbl">Cash and bank balance</div>
-          <div class="big">${inr(close, false)}</div>
-          <div class="chg">${change === 0 ? 'No change today' : `<b class="${change < 0 ? 'neg' : ''}">${change > 0 ? '+' : '−'}${inr(Math.abs(change), false)}</b> today`}</div>
-        </div>
-        <div class="accts">${d.bank.map((b) => `<div class="acct"><span>${esc(b.account)}</span><b>${inr(b.closing, false)}</b></div>`).join('')}</div>
-      </section>`}
+      <div class="section-h"><h2>Today</h2><span>${esc(fdate(d.reportDate))}</span></div>
+      ${business(T)}
+      ${money(T, 'start of today')}
 
-      <div class="section-h" ${d.restricted ? 'style="margin-top:4px"' : ''}><h2>Today</h2></div>
-      <div class="panel strip" style="--n:${d.restricted ? 4 : 6}">
-        ${stat('Bikes sold', T['SALES TODAY'], `HP ${num(T['HP SALES'])} · Cash ${num(T['CASH SALES'])}`)}
-        ${stat('Sales value', T['SALES VALUE (ON-ROAD)'], 'on-road price', true)}
-        ${stat('New bookings', T['BOOKINGS TODAY'])}
-        ${stat('Service billed', T['SERVICE AMOUNT'], '', true)}
-        ${d.restricted ? '' : `${stat('Cash deposited', T['BANK DEPOSIT'], 'into bank', true)}
-        ${stat('Bank transfers', T['BANK TRANSFER'], 'between accounts', true)}`}
-      </div>
+      <div class="section-h"><h2>${esc(monthLong)}</h2><span>1 ${esc(monthName)} to today</span></div>
+      ${business(M)}
+      ${money(M, `on 1 ${monthName}`)}
 
-      <div class="section-h"><h2>${esc(monthName)}</h2><span>month to date</span></div>
-      <div class="panel strip" style="--n:${d.restricted ? 5 : 6}">
-        ${stat('Bikes sold', M['VEHICLES SOLD · MONTH'])}
-        ${stat('Collections', M['CUSTOMER COLLECTIONS · MONTH'], 'from customers', true)}
-        ${stat('Finance DD received', M['DD RECEIVED · MONTH'], '', true)}
-        ${stat('Service revenue', M['SERVICE REVENUE · MONTH'], '', true)}
-        ${d.restricted ? '' : stat('Expenses paid', M['EXPENSES PAID · MONTH'], '', true)}
-        ${stat('Open bookings', M['OPEN BOOKINGS'], d.overdue.length ? `<span class="bad">${d.overdue.length} overdue</span>` : 'none overdue')}
-      </div>
+      ${d.restricted ? '' : `<div class="panel" style="margin-top:16px"><div class="panel-h"><h2>Cash and bank accounts</h2><small>today</small><div class="grow"></div><a href="#/daybook">Open day book</a></div>
+        <div class="tbl-wrap"><table><thead><tr><th>Account</th><th class="num">Opening</th><th class="num">Received</th><th class="num">Paid</th><th class="num">Closing</th></tr></thead><tbody>
+          ${accts.map((a) => `<tr><td class="strong">${esc(a.account)}</td><td class="num">${inr(a.opening)}</td><td class="num ${a.received ? 'in' : 'muted'}">${inr(a.received)}</td><td class="num ${a.paid ? 'out' : 'muted'}">${inr(a.paid)}</td><td class="num strong">${inr(a.closing, false)}</td></tr>`).join('')}
+          <tr class="total"><td>Total</td><td class="num">${inr(T.cash.opening + T.bank.opening, false)}</td><td class="num">${inr(T.cash.received + T.bank.received)}</td><td class="num">${inr(T.cash.paid + T.bank.paid)}</td><td class="num">${inr(T.cash.closing + T.bank.closing, false)}</td></tr>
+        </tbody></table></div>${d.unposted ? `<div class="notice warn" style="margin:12px 16px">${ic('alert')}<div>${inr(d.unposted, false)} was received without choosing an account, so it isn't in any balance.</div></div>` : ''}</div>`}
 
-      <div class="cols">
+      <div class="section-h"><h2>Charts</h2></div>
+      <div class="cols" style="margin-top:0">
         <div class="stack">
+          ${d.restricted ? '' : `<div class="panel"><div class="panel-h"><h2>Money in and out</h2><small>${esc(monthName)}, by day</small></div><div class="panel-b">
+            <div class="daychart" role="img" aria-label="Money in and out each day this month">${d.days.map((x) => `<div class="dc" title="${esc(fdate(x.date))}: in ${inr(x.in, false)}, out ${inr(x.out, false)}">
+              <div class="bars"><i class="i" style="height:${maxDay ? (x.in / maxDay) * 100 : 0}%"></i><i class="o" style="height:${maxDay ? (x.out / maxDay) * 100 : 0}%"></i></div>
+              <span>${+x.date.slice(8) % 5 === 0 || +x.date.slice(8) === 1 ? +x.date.slice(8) : ''}</span></div>`).join('')}</div>
+            <div class="legend"><span><i class="i"></i>Money in ${inr(M.cash.received + M.bank.received, false)}</span><span><i class="o"></i>Money out ${inr(M.cash.paid + M.bank.paid, false)}</span><span class="muted">Deposits and transfers between your own accounts count on both sides.</span></div>
+          </div></div>`}
+
           <div class="panel"><div class="panel-h"><h2>Follow up</h2><div class="grow"></div><small>${d.overdue.length + owes.length + dds.length || 'nothing'} pending</small></div><div class="panel-b">
             <div class="group-l">Overdue bookings: call the customer</div>
             ${d.overdue.length ? `<ul class="rows">${d.overdue.map((o) => `<li><div class="who"><b>${esc(o.customer)}</b><small>${esc(o.model)} · ${esc(o.mobile)}</small></div><div class="amt"><span class="pill red">${o.late} ${o.late === 1 ? 'day' : 'days'} late</span><small>promised ${fdate(o.commitment)}</small></div></li>`).join('')}</ul>` : '<div class="empty-line">No overdue bookings.</div>'}
-            <div class="group-l">Customer balance due · ${inr(M['CUSTOMER BALANCE DUE'], false)}</div>
+            <div class="group-l">Customer balance due · ${inr(d.customerDue, false)}</div>
             ${owes.length ? `<ul class="rows">${owes.map((b) => `<li><div class="who"><b>${esc(b.customer)}</b><small>${esc(b.model)} · ${esc(b.mobile)}</small></div><div class="amt"><b class="out">${inr(b.owes, false)}</b><small>sold ${fdate(b.date)}</small></div></li>`).join('')}</ul>` : '<div class="empty-line">Every customer has paid in full.</div>'}
-            <div class="group-l">Finance DD pending · ${inr(ddPending, false)}</div>
+            <div class="group-l">Finance DD pending · ${inr(d.ddPending, false)}</div>
             ${dds.length ? `<ul class="rows">${dds.map((b) => `<li><div class="who"><b>${esc(b.customer)}</b><small>${esc(b.model)} · ${esc(b.mobile)}</small></div><div class="amt"><b class="nowrap" style="color:var(--amber-d)">${inr(b.dd, false)}</b><small>sold ${fdate(b.date)}</small></div></li>`).join('')}</ul>` : '<div class="empty-line">No DD pending.</div>'}
           </div></div>
 
           <div class="panel"><div class="panel-h"><h2>Bikes sold</h2><small>last 6 months</small></div><div class="panel-b">
-            <ul class="rows">${months.map((m) => `<li><div style="width:72px" class="${m.sold ? '' : 'muted'}">${fmonth(m.month)}</div><div class="barline">${m.sold ? bar(m.sold, maxSold) : ''}</div><div class="amt" style="width:64px">${m.sold ? `<b>${m.sold}</b>` : '<span class="muted">–</span>'}</div><div class="amt muted" style="width:104px">${m.collections ? inr(m.collections, false) : ''}</div></li>`).join('')}</ul>
+            <ul class="rows">${d.months.map((m) => `<li><div style="width:72px" class="${m.sold ? '' : 'muted'}">${fmonth(m.month)}</div><div class="barline">${m.sold ? bar(m.sold, maxSold) : ''}</div><div class="amt" style="width:64px">${m.sold ? `<b>${m.sold}</b>` : '<span class="muted">–</span>'}</div><div class="amt muted" style="width:104px">${m.collections ? inr(m.collections, false) : ''}</div></li>`).join('')}</ul>
             <div class="muted" style="font-size:12.5px;margin-top:6px">Right column: money collected from customers that month.</div>
           </div></div>
         </div>
@@ -316,7 +325,7 @@
           <div class="panel"><div class="panel-h"><h2>Stock in showroom</h2><div class="grow"></div><a href="#/s/stock">Open stock</a></div>
             <div class="strip s3" style="--n:3;border-bottom:1px solid var(--line-2)">
               ${stat('Bikes', inStock.length, `${allotted.length} allotted to bookings`)}
-              ${canDo('stock', 'view') ? stat('Stock value', stockValue, 'purchase value', true) : ''}
+              ${canDo('stock', 'view') ? stat('Stock value', stockValue, 'purchase value', true) : stat('Open bookings', d.openBookings, `${d.allottedOpen} allotted`)}
               ${stat('Over 60 days', old, old ? '<span class="warn">sell these first</span>' : 'none ageing')}
             </div>
             <div class="panel-b" style="padding-top:8px">
@@ -336,27 +345,82 @@
         </div>
       </div>`);
     document.getElementById('refresh').onclick = () => pageDashboard();
-    const kv = (label, v, money) => [label, money ? inr(v, false) : String(num(v))];
+    const periodRows = (P) => [
+      ['Bikes sold', P.sold], ['HP / cash sales', `${P.hp} / ${P.cashSales}`], ['Sales value (on-road)', inr(P.salesValue, false)],
+      ['New bookings', P.bookings], ['Booking advance', inr(P.advance, false)], ['Service billed', inr(P.serviceValue, false)],
+      ['Collections from customers', inr(P.collections, false)],
+      ...(d.restricted ? [] : [['Cash opening', inr(P.cash.opening, false)], ['Cash closing', inr(P.cash.closing, false)], ['Bank opening', inr(P.bank.opening, false)],
+        ['Bank closing', inr(P.bank.closing, false)], ['Bank deposit', inr(P.deposit, false)], ['Expenses', inr(P.expenses, false)]]),
+    ].map(([a, b]) => [a, String(b)]);
     wireExport(() => ({
       title: 'Daily Report', subtitle: longDate,
       sections: [
-        d.restricted ? null : { heading: 'Cash and bank', columns: [{ label: 'Account' }, { label: 'Opening', type: 'money' }, { label: 'Received', type: 'money' }, { label: 'Paid', type: 'money' }, { label: 'Closing', type: 'money' }],
-          rows: d.bank.map((b) => [b.account, b.opening, b.received, b.paid, b.closing]), totals: ['Total', d.bankTotal.opening, d.bankTotal.received, d.bankTotal.paid, d.bankTotal.closing] },
-        { heading: 'Today', columns: [{ label: 'Item' }, { label: 'Value' }], rows: [
-          kv('Bikes sold', T['SALES TODAY']), kv('HP sales', T['HP SALES']), kv('Cash sales', T['CASH SALES']), kv('Sales value (on-road)', T['SALES VALUE (ON-ROAD)'], true),
-          kv('New bookings', T['BOOKINGS TODAY']), kv('Service billed', T['SERVICE AMOUNT'], true), kv('Cash deposited into bank', T['BANK DEPOSIT'], true),
-          kv('Bank transfers', T['BANK TRANSFER'], true), kv('Opening balance', open, true), kv('Closing balance', close, true)].filter((r) => !d.restricted || !/bank|balance/i.test(r[0])) },
-        { heading: `${monthName} to date`, columns: [{ label: 'Item' }, { label: 'Value' }], rows: [
-          kv('Bikes sold', M['VEHICLES SOLD · MONTH']), kv('Collections from customers', M['CUSTOMER COLLECTIONS · MONTH'], true), kv('Finance DD received', M['DD RECEIVED · MONTH'], true),
-          kv('Service revenue', M['SERVICE REVENUE · MONTH'], true), kv('Expenses paid', M['EXPENSES PAID · MONTH'], true), kv('Open bookings', M['OPEN BOOKINGS']), kv('Customer balance due', M['CUSTOMER BALANCE DUE'], true)].filter((r) => !d.restricted || r[0] !== 'Expenses paid') },
+        { heading: 'Today', columns: [{ label: 'Item' }, { label: 'Value' }], rows: periodRows(T) },
+        { heading: `${monthLong} to date`, columns: [{ label: 'Item' }, { label: 'Value' }], rows: periodRows(M) },
+        d.restricted ? null : { heading: 'Cash and bank accounts (today)', columns: [{ label: 'Account' }, { label: 'Opening', type: 'money' }, { label: 'Received', type: 'money' }, { label: 'Paid', type: 'money' }, { label: 'Closing', type: 'money' }],
+          rows: accts.map((a) => [a.account, a.opening, a.received, a.paid, a.closing]), totals: ['Total', T.cash.opening + T.bank.opening, T.cash.received + T.bank.received, T.cash.paid + T.bank.paid, T.cash.closing + T.bank.closing] },
         { heading: 'Overdue bookings', columns: [{ label: 'Customer' }, { label: 'Mobile' }, { label: 'Model' }, { label: 'Promised', type: 'date' }, { label: 'Days late', type: 'num' }, { label: 'Advance', type: 'money' }],
           rows: d.overdue.map((o) => [o.customer, o.mobile, o.model, o.commitment, o.late, o.advance]) },
         { heading: 'Customer balance and DD pending', columns: [{ label: 'Customer' }, { label: 'Mobile' }, { label: 'Model' }, { label: 'Sold on', type: 'date' }, { label: 'Customer owes', type: 'money' }, { label: 'DD pending', type: 'money' }],
-          rows: d.balances.map((b) => [b.customer, b.mobile, b.model, b.date, b.owes || '', b.dd || '']), totals: ['Total', '', '', '', d.balances.reduce((x, b) => x + b.owes, 0), ddPending] },
+          rows: d.balances.map((b) => [b.customer, b.mobile, b.model, b.date, b.owes || '', b.dd || '']), totals: ['Total', '', '', '', d.customerDue, d.ddPending] },
         { heading: 'Stock by model', columns: [{ label: 'Model' }, { label: 'Available', type: 'num' }, { label: 'Allotted', type: 'num' }, { label: 'Sold this month', type: 'num' }, { label: 'Waiting customers', type: 'num' }],
           rows: d.models.filter((m) => m.available + m.allotted + m.sold + m.waiting > 0).map((m) => [m.model, m.available, m.allotted, m.sold, m.waiting]) },
         d.restricted ? null : { heading: `Expenses in ${monthName}`, columns: [{ label: 'Category' }, { label: 'Paid', type: 'money' }], rows: d.expenses.map((e) => [e.category, e.paid]), totals: ['Total', d.expenses.reduce((x, e) => x + e.paid, 0)] },
       ].filter(Boolean),
+    }));
+  }
+
+  // ---------- day book: every entry of one day, cash and bank, opening and closing ----------
+  async function pageDaybook() {
+    S.dbDate = S.dbDate || todayIso();
+    loading('Day Book');
+    const d = await api('GET', `/api/daybook?date=${S.dbDate}`);
+    const shift = (n) => { const x = new Date(S.dbDate + 'T00:00:00Z'); x.setUTCDate(x.getUTCDate() + n); return x.toISOString().slice(0, 10); };
+    const isToday = S.dbDate === todayIso();
+    const longDate = new Date(S.dbDate + 'T00:00:00').toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+    const KIND = { receipt: ['green', 'Receipt'], payment: ['red', 'Payment'], contra: ['grey', 'Transfer'] };
+    const tin = d.entries.reduce((s, e) => s + e.in, 0), tout = d.entries.reduce((s, e) => s + e.out, 0);
+    const card = (label, g, cls) => `<div class="db-card ${cls}"><div class="h">${label}</div>
+      <dl><div><dt>Opening</dt><dd>${inr(g.opening, false)}</dd></div><div><dt>Received</dt><dd class="${g.received ? 'in' : 'muted'}">${g.received ? '+' + inr(g.received, false) : '–'}</dd></div>
+      <div><dt>Paid</dt><dd class="${g.paid ? 'out' : 'muted'}">${g.paid ? '−' + inr(g.paid, false) : '–'}</dd></div><div class="cl"><dt>Closing</dt><dd>${inr(g.closing, false)}</dd></div></dl></div>`;
+    shell('Day Book', esc(longDate), `
+      <div class="db-nav"><button class="icon-btn" id="dprev" aria-label="Previous day">${ic('prev')}</button>
+        <input type="date" id="ddate" value="${S.dbDate}" max="${todayIso()}" aria-label="Day">
+        <button class="icon-btn" id="dnext" aria-label="Next day" ${isToday ? 'disabled' : ''}>${ic('next')}</button>
+        ${isToday ? '' : '<button class="btn" id="dtoday">Today</button>'}</div>` + exportBtn(), `
+      <div class="db-cards">
+        ${card('Cash in hand', d.cash, 'cash')}
+        ${card('Bank accounts', d.bank, 'bank')}
+        ${card('Total', { opening: d.cash.opening + d.bank.opening, received: d.cash.received + d.bank.received, paid: d.cash.paid + d.bank.paid, closing: d.cash.closing + d.bank.closing }, 'total')}
+      </div>
+      <div class="panel" style="margin-top:16px"><div class="panel-h"><h2>Entries</h2><small>${d.entries.length} on this day</small></div>
+        ${d.entries.length ? `<div class="tbl-wrap"><table><thead><tr><th>Particulars</th><th class="hide-m">Type</th><th>Account</th><th class="hide-m">From</th><th class="num">Received (in)</th><th class="num">Paid (out)</th></tr></thead><tbody>
+          ${d.entries.map((e) => `<tr class="${e.ref ? 'click' : ''}" data-ref="${e.ref ? esc(e.ref.join(':')) : ''}"><td class="wrap">${esc(e.text)}</td><td class="hide-m"><span class="pill ${KIND[e.kind][0]}">${KIND[e.kind][1]}</span></td><td>${esc(e.account)}</td><td class="hide-m muted">${esc(e.from)}</td><td class="num in">${e.in ? inr(e.in, false) : ''}</td><td class="num out">${e.out ? inr(e.out, false) : ''}</td></tr>`).join('')}
+          <tr class="total"><td colspan="2">Total</td><td class="hide-m"></td><td class="hide-m"></td><td class="num">${inr(tin, false)}</td><td class="num">${inr(tout, false)}</td></tr>
+        </tbody></table></div>` : '<div class="empty">No entries on this day.</div>'}
+      </div>
+      <div class="panel" style="margin-top:16px"><div class="panel-h"><h2>Balances by account</h2></div><div class="tbl-wrap"><table>
+        <thead><tr><th>Account</th><th class="num">Opening</th><th class="num">Received</th><th class="num">Paid</th><th class="num">Closing</th></tr></thead><tbody>
+        ${d.accounts.map((a) => `<tr><td class="strong">${esc(a.account)}</td><td class="num">${inr(a.opening)}</td><td class="num ${a.received ? 'in' : 'muted'}">${inr(a.received)}</td><td class="num ${a.paid ? 'out' : 'muted'}">${inr(a.paid)}</td><td class="num strong">${inr(a.closing, false)}</td></tr>`).join('')}
+      </tbody></table></div></div>
+      <p class="hint" style="margin:10px 2px">Receipts: booking advances, sale payments, finance DD, service bills and other money received. Payments: expenses. Transfers: cash deposits and bank-to-bank moves, shown on both accounts.</p>`);
+    const go = (v) => { S.dbDate = v; pageDaybook(); };
+    document.getElementById('dprev').onclick = () => go(shift(-1));
+    const nx = document.getElementById('dnext'); if (nx) nx.onclick = () => go(shift(1));
+    const td = document.getElementById('dtoday'); if (td) td.onclick = () => go(todayIso());
+    document.getElementById('ddate').onchange = (e) => e.target.value && go(e.target.value);
+    document.querySelectorAll('tr[data-ref]').forEach((tr) => tr.dataset.ref && (tr.onclick = () => { const [k, r] = tr.dataset.ref.split(':'); if (canDo(k, 'view')) openRow(k, Number(r)); }));
+    wireExport(() => ({
+      title: 'Day Book', subtitle: longDate,
+      sections: [
+        { heading: 'Summary', columns: [{ label: '' }, { label: 'Opening', type: 'money' }, { label: 'Received', type: 'money' }, { label: 'Paid', type: 'money' }, { label: 'Closing', type: 'money' }],
+          rows: [['Cash in hand', d.cash.opening, d.cash.received, d.cash.paid, d.cash.closing], ['Bank accounts', d.bank.opening, d.bank.received, d.bank.paid, d.bank.closing]],
+          totals: ['Total', d.cash.opening + d.bank.opening, d.cash.received + d.bank.received, d.cash.paid + d.bank.paid, d.cash.closing + d.bank.closing] },
+        { heading: 'Entries', columns: [{ label: 'Particulars' }, { label: 'Type' }, { label: 'Account' }, { label: 'From' }, { label: 'Received', type: 'money' }, { label: 'Paid', type: 'money' }],
+          rows: d.entries.map((e) => [e.text, KIND[e.kind][1], e.account, e.from, e.in || '', e.out || '']), totals: ['Total', '', '', '', tin, tout] },
+        { heading: 'Balances by account', columns: [{ label: 'Account' }, { label: 'Opening', type: 'money' }, { label: 'Received', type: 'money' }, { label: 'Paid', type: 'money' }, { label: 'Closing', type: 'money' }],
+          rows: d.accounts.map((a) => [a.account, a.opening, a.received, a.paid, a.closing]) },
+      ],
     }));
   }
 
@@ -407,8 +471,9 @@
     service: [['all', 'All', () => true], ['month', 'This month', (r) => String(r.A).slice(0, 7) === todayIso().slice(0, 7)], ['today', 'Today', (r) => r.A === todayIso()]],
     expenses: [['all', 'All', () => true], ['month', 'This month', (r) => String(r.A).slice(0, 7) === todayIso().slice(0, 7)], ['today', 'Today', (r) => r.A === todayIso()]],
     bank: [['all', 'All', () => true], ['month', 'This month', (r) => String(r.A).slice(0, 7) === todayIso().slice(0, 7)]],
+    payments: [['all', 'All', () => true], ['month', 'This month', (r) => String(r.A).slice(0, 7) === todayIso().slice(0, 7)], ['today', 'Today', (r) => r.A === todayIso()]],
   };
-  const NEW_LABEL = { stock: 'Add bike', bookings: 'New booking', sales: 'New sale', service: 'New service bill', expenses: 'New expense', bank: 'New bank entry' };
+  const NEW_LABEL = { stock: 'Add bike', bookings: 'New booking', sales: 'New sale', payments: 'Add payment', service: 'New service bill', expenses: 'New expense', bank: 'New bank entry' };
 
   async function pageSheet(key) {
     const sh = S.schema[key];
@@ -416,6 +481,7 @@
     loading(sh.title);
     const res = await api('GET', `/api/sheets/${key}`);
     S.data[key] = res;
+    if (key === 'sales') await loadSaleExtras();
     if (!S.filter[key]) S.filter[key] = FILTERS[key][0][0];
     renderSheet(key);
   }
@@ -432,12 +498,13 @@
     const cols = sh.list.filter((c) => !phoneCol || c !== phoneCol.c).map((c) => colOf(key, c));
     const nameCell = (c, r) => `<span class="strong">${cellHtml(c, r[c.c])}</span>${flag(r)}${phoneCol && c.c === 'B' && r[phoneCol.c] ? `<span class="sub">${esc(r[phoneCol.c])}</span>` : ''}`;
     const flag = (r) => (appr.has(r._row) ? `<span class="row-flag in">${ic('unlock')}open ${appr.get(r._row)}m</span>` : pend.has(r._row) ? `<span class="row-flag" style="color:var(--amber-d)">${ic('clock')}edit requested</span>` : '');
-    const mobTitle = { stock: (r) => `${r.B} · ${r.E}`, bookings: (r) => r.B, sales: (r) => r.B, service: (r) => r.B, expenses: (r) => r.B, bank: (r) => r.C };
-    const mobPill = { stock: 'H', bookings: 'K', sales: 'AJ', service: 'G', expenses: 'I', bank: 'H' };
+    const mobTitle = { stock: (r) => `${r.B} · ${r.E}`, bookings: (r) => r.B, sales: (r) => r.B, payments: (r) => r.C || r.B, service: (r) => r.B, expenses: (r) => r.B, bank: (r) => r.C };
+    const mobPill = { stock: 'H', bookings: 'K', sales: 'AJ', payments: '', service: '', expenses: '', bank: '' };
     const mobMeta = {
       stock: (r) => [r.C, r.D, inr(r.G), r.I],
       bookings: (r) => [fdate(r.A), r.D, r.C, r.J || '', String(r.O).startsWith('OVERDUE') ? r.O : ''],
       sales: (r) => [fdate(r.A), r.E, r.I, 'Cost ' + inr(r.Q), num(r.AI) > 0.5 ? 'Owes ' + inr(r.AI) : ''],
+      payments: (r) => [fdate(r.A), inr(r.D), r.E, r.B, r.F ? 'UTR ' + r.F : ''],
       service: (r) => [fdate(r.A), r.C, r.D, inr(r.E)],
       expenses: (r) => [fdate(r.A), r.D, r.E, num(r.F) ? '+' + inr(r.F) : '-' + inr(r.G)],
       bank: (r) => [fdate(r.A), r.B, r.D, num(r.E) ? '+' + inr(r.E) : '-' + inr(r.F)],
@@ -519,9 +586,14 @@
     return d;
   }
 
+  // the sale form shows the sale's payments and adds its booking advance
+  async function loadSaleExtras() {
+    S.data.payments = await api('GET', '/api/sheets/payments');
+    if (canDo('bookings', 'view')) S.data.bookings = await api('GET', '/api/sheets/bookings');
+  }
   async function openRow(key, row) {
     // always open with the latest values and approval state
-    try { S.data[key] = await api('GET', `/api/sheets/${key}`); } catch (e) { if (e.status === 401) return renderLogin(); }
+    try { S.data[key] = await api('GET', `/api/sheets/${key}`); if (key === 'sales') await loadSaleExtras(); } catch (e) { if (e.status === 401) return renderLogin(); }
     const rec = S.data[key].rows.find((r) => r._row === row);
     if (rec) openForm(key, rec); else { toast('This entry was changed. Reloading…', true); renderSheet(key); }
   }
@@ -537,7 +609,7 @@
 
   // amounts far above normal are usually a typing slip (an extra zero): ask before saving
   const HIGH = { stock: { G: 1500000 }, bookings: { G: 500000 }, service: { E: 100000 }, expenses: { F: 500000, G: 500000 },
-    sales: { K: 1500000, S: 1500000, V: 1500000, Y: 1500000, AB: 1500000, AC: 1500000 }, bank: { E: 5000000, F: 5000000 } };
+    sales: { K: 1500000, AB: 1500000, AC: 1500000 }, payments: { D: 1500000 }, bank: { E: 5000000, F: 5000000 } };
   let salesBal = 0;
   function confirmUnusual(key, form, rec) {
     const notes = [];
@@ -575,8 +647,10 @@
       }
       const req = c.req ? ' <span class="req">*</span>' : '';
       let input;
-      if (c.type === 'list' || c.type === 'engine') {
-        const opts = c.type === 'engine' ? engineOptions(key, v, form) : (S.lists[c.list] || []).map((x) => ({ v: x, t: x }));
+      if (c.type === 'list' || c.type === 'engine' || c.type === 'sold') {
+        const opts = c.type === 'engine' ? engineOptions(key, v, form)
+          : c.type === 'sold' ? S.sold.slice().reverse().map((x) => ({ v: x.engine, t: `${x.engine} · ${x.customer}${x.model ? ' · ' + x.model : ''}` }))
+          : (S.lists[c.list] || []).map((x) => ({ v: x, t: x }));
         if (v !== '' && !opts.some((o) => String(o.v) === String(v))) opts.unshift({ v, t: String(v) });
         input = `<select name="${c.c}"><option value="">— select —</option>${opts.map((o) => `<option value="${esc(o.v)}" ${String(o.v) === String(v) ? 'selected' : ''}>${esc(o.t)}</option>`).join('')}</select>`;
       } else if (c.type === 'date') {
@@ -604,17 +678,48 @@
       <form class="drawer-b" id="f" autocomplete="off" novalidate>
         ${notice}
         ${key === 'sales' ? '<div class="fgroup"><h4>Tally</h4><div class="tally" id="tally"></div></div>' : ''}
-        ${groups.map((g) => { const inner = g.cols.map((c) => fieldHtml(colOf(key, c))).join(''); return inner ? `<div class="fgroup"${g.hpOnly ? ' data-hp="1"' : ''}><h4>${esc(g.title)}</h4><div class="fgrid">${inner}</div></div>` : ''; }).join('')}
+        ${groups.map((g) => { const inner = g.cols.map((c) => fieldHtml(colOf(key, c))).join(''); return (inner ? `<div class="fgroup"${g.hpOnly ? ' data-hp="1"' : ''}><h4>${esc(g.title)}</h4><div class="fgrid">${inner}</div></div>` : '') + (key === 'sales' && g.title === 'Vehicle cost' ? '<div class="fgroup" id="paygrp"></div>' : ''); }).join('')}
       </form>
       <div class="drawer-f">
         ${!isNew && lockedAny && canDo(key, 'add') && !approved && !pending ? `<button class="btn" id="reqedit">${ic('shield')}Request edit</button>` : ''}
         <div style="flex:1"></div>
         <button class="btn" data-close>${canDo(key, 'add') ? 'Cancel' : 'Close'}</button>
-        ${canDo(key, 'add') && (isNew || sh.cols.some(canEdit)) ? `<button class="btn primary" id="save">${ic('check')}${isNew ? 'Save entry' : 'Save changes'}</button>` : ''}
+        ${canDo(key, 'add') && (isNew || key === 'sales' || sh.cols.some(canEdit)) ? `<button class="btn primary" id="save">${ic('check')}${isNew ? 'Save entry' : 'Save changes'}</button>` : ''}
       </div>`);
 
     const f = d.querySelector('#f');
     const read = () => { f.querySelectorAll('[name]').forEach((el) => (form[el.name] = el.value)); };
+
+    // ---- Vehicle Sales: any number of customer payments (saved in Sale Payments) ----
+    const savedPays = key === 'sales' && !isNew ? (S.data.payments?.rows || []).filter((p) => String(p.B) === String(rec.D)).sort((a, b) => (a.A < b.A ? -1 : 1)) : [];
+    const newPays = [];
+    const canPay = key === 'sales' && canDo('sales', 'add');
+    const accOpts = (v) => `<option value="">Account…</option>${(S.lists.accounts || []).map((a) => `<option ${a === v ? 'selected' : ''}>${esc(a)}</option>`).join('')}`;
+    function drawPays() {
+      const g = d.querySelector('#paygrp'); if (!g) return;
+      const n = savedPays.length + newPays.length;
+      g.innerHTML = `<h4>Customer payments${n ? ` <span class="muted">· ${n}</span>` : ''}</h4>
+        ${savedPays.length ? `<ul class="pays">${savedPays.map((p) => `<li><span class="pd">${fdate(p.A)}</span><b>${inr(p.D, false)}</b><span>${esc(p.E)}</span><span class="muted">${p.F ? 'UTR ' + esc(p.F) : ''}${p.G ? (p.F ? ' · ' : '') + esc(p.G) : ''}</span><button type="button" class="link" data-openpay="${p._row}">Open</button></li>`).join('')}</ul>` : ''}
+        ${newPays.map((p, i) => `<div class="np" data-i="${i}">
+          <input type="date" data-k="A" value="${esc(p.A)}" aria-label="Payment date">
+          <input type="number" inputmode="decimal" min="0" step="any" data-k="D" value="${esc(p.D)}" placeholder="₹ Amount" aria-label="Payment amount">
+          <select data-k="E" aria-label="Received in">${accOpts(p.E)}</select>
+          <input type="text" data-k="F" value="${esc(p.F)}" placeholder="UTR / transaction ID" aria-label="UTR or reference number" autocomplete="off" spellcheck="false" ${p.E && !/cash/i.test(p.E) ? '' : 'hidden'}>
+          <input type="text" data-k="G" value="${esc(p.G)}" placeholder="Remarks (optional)" aria-label="Remarks" maxlength="200">
+          <button type="button" class="icon-btn np-x" aria-label="Remove this payment">${ic('x')}</button></div>`).join('')}
+        ${!n ? '<p class="hint" style="margin:0 0 10px">No payments yet. The booking advance is counted automatically.</p>' : ''}
+        ${canPay ? `<button type="button" class="btn sm" id="addpay">${ic('plus')}Add payment</button>` : ''}`;
+      g.querySelectorAll('.np').forEach((row) => {
+        const p = newPays[+row.dataset.i];
+        row.querySelectorAll('[data-k]').forEach((el) => {
+          el.oninput = el.onchange = () => { p[el.dataset.k] = el.value; if (el.dataset.k === 'E') row.querySelector('[data-k="F"]').hidden = !(p.E && !/cash/i.test(p.E)); sync(); };
+        });
+        row.querySelector('.np-x').onclick = () => { newPays.splice(+row.dataset.i, 1); drawPays(); sync(); };
+      });
+      g.querySelectorAll('[data-openpay]').forEach((b) => b.onclick = () => openRow('payments', Number(b.dataset.openpay)));
+      const ab = g.querySelector('#addpay');
+      if (ab) ab.onclick = () => { newPays.push({ A: todayIso(), D: '', E: '', F: '', G: '' }); drawPays(); g.querySelector(`.np[data-i="${newPays.length - 1}"] [data-k="D"]`)?.focus(); };
+    }
     const sync = () => {
       read();
       // UTR / reference: only for money into a bank account (GPay, UPI, NEFT, card)
@@ -632,9 +737,9 @@
           const set = (c, v) => { const el = d.querySelector(`[data-auto="${c}"]`); if (el) el.innerHTML = v ? esc(v) : '<span class="muted">auto</span>'; };
           set('E', e?.model); set('F', e?.variant); set('G', e?.colour); set('H', e?.frame);
         }
-        const adv = (S.data.bookings?.rows || []).filter((b) => String(b.J) === String(form.D) && form.D).reduce((s, b) => s + num(b.G), 0);
+        const adv = !isNew ? num(rec.R) : (S.data.bookings?.rows || []).filter((b) => String(b.J) === String(form.D) && form.D).reduce((s, b) => s + num(b.G), 0);
         const total = num(form.K) + num(form.L) + num(form.M) + num(form.N) + num(form.O) - num(form.P);
-        const paid = adv + num(form.S) + num(form.V) + num(form.Y);
+        const paid = adv + savedPays.reduce((s, p) => s + num(p.D), 0) + newPays.reduce((s, p) => s + num(p.D), 0);
         const dd = hp ? (form.AD ? num(form.AC) : num(form.AB)) : 0;
         const bal = total - paid - dd;
         salesBal = bal;
@@ -664,23 +769,41 @@
       }
       sync();
     });
-    if (key === 'sales' && !S.data.bookings) api('GET', '/api/sheets/bookings').then((r) => { S.data.bookings = r; sync(); }).catch(() => {});
+    if (key === 'sales' && !S.data.bookings && canDo('bookings', 'view')) api('GET', '/api/sheets/bookings').then((r) => { S.data.bookings = r; sync(); }).catch(() => {});
+    if (key === 'sales') drawPays();
     sync();
 
     const save = d.querySelector('#save');
     if (save) save.onclick = async () => {
       read();
+      const pays = newPays.filter((p) => p.D !== '' || p.F || p.G);
+      for (const [i, p] of pays.entries()) {
+        const n = savedPays.length + i + 1;
+        if (!(num(p.D) > 0)) return toast(`Payment ${n}: enter the amount`, true);
+        if (!p.A) return toast(`Payment ${n}: pick the date`, true);
+        if (!p.E) return toast(`Payment ${n}: pick the account it was received in`, true);
+        if (!/cash/i.test(p.E) && !String(p.F).trim()) return toast(`Payment ${n} went to ${p.E}: enter its UTR / reference no (GPay, UPI, NEFT, card).`, true);
+      }
+      if (pays.some((p) => num(p.D) > HIGH.payments.D) && !confirm(`A payment is more than ${inr(HIGH.payments.D, false)}. Save anyway?`)) return;
       if (!confirmUnusual(key, form, isNew ? null : rec)) return;
       const body = {};
       sh.cols.filter(canEdit).forEach((c) => {
         if (key === 'sales' && c.hpOnly && form.I !== 'HP') { if (!isNew && rec[c.c] !== '') body[c.c] = ''; return; }
         if (isNew || String(form[c.c] ?? '') !== String(rec[c.c] ?? '')) body[c.c] = form[c.c];
       });
-      if (!isNew && !Object.keys(body).length) { closeDrawer(); return; }
+      const payList = key === 'sales' ? newPays.filter((p) => num(p.D) > 0) : [];
+      if (!isNew && !Object.keys(body).length && !payList.length) { closeDrawer(); return; }
       save.disabled = true;
       try {
-        await api(isNew ? 'POST' : 'PUT', isNew ? `/api/sheets/${key}` : `/api/sheets/${key}/${rec._row}`, body);
-        toast(isNew ? 'Saved to the sheet' : 'Changes saved');
+        if (isNew || Object.keys(body).length) await api(isNew ? 'POST' : 'PUT', isNew ? `/api/sheets/${key}` : `/api/sheets/${key}/${rec._row}`, body);
+        let paid = 0, payErr = '';
+        const engine = String(form.D || rec?.D || '');
+        for (const p of payList) {
+          try { await api('POST', '/api/sheets/payments', { A: p.A, B: engine, D: p.D, E: p.E, F: p.F, G: p.G }); paid++; }
+          catch (e) { payErr = e.message; break; }
+        }
+        if (payErr) toast(`${isNew ? 'Sale saved' : 'Saved'}, but payment ${paid + 1} wasn't: ${payErr}`, true);
+        else toast(payList.length ? `${isNew ? 'Sale saved' : 'Saved'} with ${paid} ${paid === 1 ? 'payment' : 'payments'}` : isNew ? 'Saved to the sheet' : 'Changes saved');
         closeDrawer();
         await refreshCore();
         pageSheet(key);
@@ -1032,11 +1155,12 @@
   async function route() {
     closeDrawer();
     const h = location.hash || firstPage() || '#/dashboard';
-    const key = h.startsWith('#/s/') ? h.slice(4) : h === '#/ledger' ? 'ledger' : h === '#/access' ? '@users' : h === '#/approvals' ? '@approvals' : h === '#/masters' ? 'masters' : 'dashboard';
+    const key = h.startsWith('#/s/') ? h.slice(4) : h === '#/ledger' || h === '#/daybook' ? 'ledger' : h === '#/access' ? '@users' : h === '#/approvals' ? '@approvals' : h === '#/masters' ? 'masters' : 'dashboard';
     if (!navAllowed(key)) return route404();
     try {
       if (h.startsWith('#/s/')) await pageSheet(h.slice(4));
       else if (h === '#/ledger') await pageLedger();
+      else if (h === '#/daybook') await pageDaybook();
       else if (h === '#/approvals') await pageApprovals();
       else if (h === '#/access') await pageAccess();
       else if (h === '#/masters') await pageMasters();
@@ -1051,7 +1175,7 @@
 
   async function refreshCore() {
     const b = await api('GET', '/api/bootstrap');
-    Object.assign(S, { user: b.user, schema: b.schema, lists: b.lists, engines: b.engines, demo: b.demo, showroom: b.showroom });
+    Object.assign(S, { user: b.user, schema: b.schema, lists: b.lists, engines: b.engines, sold: b.sold || [], demo: b.demo, showroom: b.showroom });
     if (S.user.approve) {
       api('GET', '/api/requests').then((r) => { S.pendingCount = r.requests.filter((x) => x.status === 'Pending').length; const n = document.querySelector('a[href="#/approvals"]'); if (n && S.pendingCount && !n.querySelector('.badge')) n.insertAdjacentHTML('beforeend', `<span class="badge">${S.pendingCount}</span>`); }).catch(() => {});
     }

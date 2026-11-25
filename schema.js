@@ -1,5 +1,6 @@
 // Column map of the RE Showroom Google Sheet. Data rows run 3..1002.
-// type: date | text | phone | money | list | engine | auto
+// type: date | text | phone | money | list | engine | sold (engine no of a saved sale) | auto
+// perm: the section whose access level applies (default: the sheet's own key)
 // list: key into the Masters lists (see MASTERS below)
 
 const FIRST_ROW = 3;
@@ -7,7 +8,7 @@ const LAST_ROW = 1002;
 
 const SHEETS = {
   stock: {
-    name: 'Vehicle Stock', title: 'Vehicle Stock', icon: 'bike', last: 'K', key: 'E',
+    name: 'Vehicle Stock', title: 'Vehicle Stock', icon: 'bike', last: 'J', key: 'E',
     cols: [
       { c: 'A', label: 'Inward date', type: 'date', req: true },
       { c: 'B', label: 'Model', type: 'list', list: 'models', req: true },
@@ -19,12 +20,11 @@ const SHEETS = {
       { c: 'H', label: 'Status', type: 'auto', status: true },
       { c: 'I', label: 'Allotted / sold to', type: 'auto' },
       { c: 'J', label: 'Days in stock', type: 'auto' },
-      { c: 'K', label: 'Check', type: 'auto', check: true },
     ],
     list: ['A', 'B', 'C', 'D', 'E', 'G', 'H', 'I', 'J'],
   },
   bookings: {
-    name: 'Bookings', title: 'Bookings', icon: 'calendar', last: 'Q', key: 'B',
+    name: 'Bookings', title: 'Bookings', icon: 'calendar', last: 'P', key: 'B',
     cols: [
       { c: 'A', label: 'Booking date', type: 'date', req: true },
       { c: 'B', label: 'Customer name', type: 'text', req: true },
@@ -34,7 +34,7 @@ const SHEETS = {
       { c: 'F', label: 'Colour', type: 'list', list: 'colours' },
       { c: 'G', label: 'Booking amount', type: 'money' },
       { c: 'H', label: 'Received in', type: 'list', list: 'accounts' },
-      { c: 'Q', label: 'UTR / reference no', type: 'text', refOf: 'H', amountOf: 'G' },
+      { c: 'P', label: 'UTR / reference no', type: 'text', refOf: 'H', amountOf: 'G' },
       { c: 'I', label: 'Commitment date', type: 'date' },
       { c: 'J', label: 'Allotted engine no', type: 'engine', engineFor: 'booking' },
       { c: 'K', label: 'Allotment', type: 'auto', status: true },
@@ -42,18 +42,16 @@ const SHEETS = {
       { c: 'M', label: 'Delivery', type: 'auto', status: true },
       { c: 'N', label: 'Days left', type: 'auto' },
       { c: 'O', label: 'Alert', type: 'auto', status: true },
-      { c: 'P', label: 'Check', type: 'auto', check: true },
     ],
     list: ['A', 'B', 'C', 'D', 'G', 'I', 'K', 'J', 'O'],
   },
   sales: {
-    name: 'Vehicle Sales', title: 'Vehicle Sales', icon: 'receipt', last: 'AO', key: 'B',
+    name: 'Vehicle Sales', title: 'Vehicle Sales', icon: 'receipt', last: 'AK', key: 'B',
     groups: [
       { title: 'Customer & bike', cols: ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J'] },
       { title: 'Vehicle cost', cols: ['K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R'] },
-      { title: 'Customer payments', cols: ['S', 'T', 'U', 'AM', 'V', 'W', 'X', 'AN', 'Y', 'Z', 'AA', 'AO'] },
       { title: 'Finance DD (HP only)', cols: ['AB', 'AC', 'AD', 'AE'], hpOnly: true },
-      { title: 'Tally', cols: ['AF', 'AG', 'AH', 'AI', 'AJ', 'AK', 'AL'] },
+      { title: 'Tally', cols: ['AF', 'AG', 'AH', 'AI', 'AJ', 'AK'] },
     ],
     cols: [
       { c: 'A', label: 'Sales date', type: 'date', req: true },
@@ -74,15 +72,6 @@ const SHEETS = {
       { c: 'P', label: 'Discount', type: 'money' },
       { c: 'Q', label: 'Total vehicle cost', type: 'auto', money: true },
       { c: 'R', label: 'Booking advance', type: 'auto', money: true },
-      { c: 'S', label: 'Payment 1', type: 'money' },
-      { c: 'T', label: 'Payment 1 date', type: 'date' },
-      { c: 'U', label: 'Payment 1 received in', type: 'list', list: 'accounts' },
-      { c: 'V', label: 'Payment 2', type: 'money' },
-      { c: 'W', label: 'Payment 2 date', type: 'date' },
-      { c: 'X', label: 'Payment 2 received in', type: 'list', list: 'accounts' },
-      { c: 'Y', label: 'Payment 3', type: 'money' },
-      { c: 'Z', label: 'Payment 3 date', type: 'date' },
-      { c: 'AA', label: 'Payment 3 received in', type: 'list', list: 'accounts' },
       { c: 'AB', label: 'DD sanctioned', type: 'money', hpOnly: true },
       { c: 'AC', label: 'DD received', type: 'money', hpOnly: true },
       { c: 'AD', label: 'DD received date', type: 'date', hpOnly: true },
@@ -93,15 +82,11 @@ const SHEETS = {
       { c: 'AI', label: 'Customer balance', type: 'auto', money: true },
       { c: 'AJ', label: 'Payment status', type: 'auto', status: true },
       { c: 'AK', label: 'Booking type', type: 'auto' },
-      { c: 'AL', label: 'Check', type: 'auto', check: true },
-      { c: 'AM', label: 'Payment 1 UTR / ref no', type: 'text', refOf: 'U', amountOf: 'S' },
-      { c: 'AN', label: 'Payment 2 UTR / ref no', type: 'text', refOf: 'X', amountOf: 'V' },
-      { c: 'AO', label: 'Payment 3 UTR / ref no', type: 'text', refOf: 'AA', amountOf: 'Y' },
     ],
     list: ['A', 'B', 'C', 'E', 'I', 'Q', 'AI', 'AJ'],
   },
   service: {
-    name: 'Service', title: 'Service', icon: 'wrench', last: 'H', key: 'B',
+    name: 'Service', title: 'Service', icon: 'wrench', last: 'G', key: 'B',
     cols: [
       { c: 'A', label: 'Date', type: 'date', req: true },
       { c: 'B', label: 'Customer name', type: 'text', req: true },
@@ -109,13 +94,12 @@ const SHEETS = {
       { c: 'D', label: 'Service type', type: 'list', list: 'serviceTypes', req: true },
       { c: 'E', label: 'Bill value', type: 'money' },
       { c: 'F', label: 'Received in', type: 'list', list: 'accounts' },
-      { c: 'H', label: 'UTR / reference no', type: 'text', refOf: 'F', amountOf: 'E' },
-      { c: 'G', label: 'Check', type: 'auto', check: true },
+      { c: 'G', label: 'UTR / reference no', type: 'text', refOf: 'F', amountOf: 'E' },
     ],
-    list: ['A', 'B', 'C', 'D', 'E', 'F', 'G'],
+    list: ['A', 'B', 'C', 'D', 'E', 'F'],
   },
   expenses: {
-    name: 'Expenses', title: 'Expenses', icon: 'wallet', last: 'I', key: 'B',
+    name: 'Expenses', title: 'Expenses', icon: 'wallet', last: 'H', key: 'B',
     cols: [
       { c: 'A', label: 'Date', type: 'date', req: true },
       { c: 'B', label: 'Particulars', type: 'text', req: true },
@@ -125,12 +109,11 @@ const SHEETS = {
       { c: 'F', label: 'Received', type: 'money' },
       { c: 'G', label: 'Paid', type: 'money' },
       { c: 'H', label: 'Running balance', type: 'auto', money: true },
-      { c: 'I', label: 'Check', type: 'auto', check: true },
     ],
-    list: ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'I'],
+    list: ['A', 'B', 'C', 'D', 'E', 'F', 'G'],
   },
   bank: {
-    name: 'Bank Entries', title: 'Bank Entries', icon: 'bank', last: 'H', key: 'C',
+    name: 'Bank Entries', title: 'Bank Entries', icon: 'bank', last: 'G', key: 'C',
     cols: [
       { c: 'A', label: 'Date', type: 'date', req: true },
       { c: 'B', label: 'Account', type: 'list', list: 'accounts', req: true },
@@ -139,9 +122,22 @@ const SHEETS = {
       { c: 'E', label: 'Credit / in', type: 'money' },
       { c: 'F', label: 'Debit / out', type: 'money' },
       { c: 'G', label: 'Contra account', type: 'list', list: 'accounts' },
-      { c: 'H', label: 'Check', type: 'auto', check: true },
     ],
-    list: ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'],
+    list: ['A', 'B', 'C', 'D', 'E', 'F', 'G'],
+  },
+  // every customer payment for a sale, one row each (as many as needed); uses the Vehicle Sales permissions
+  payments: {
+    name: 'Sale Payments', title: 'Sale Payments', icon: 'receipt', last: 'G', key: 'C', perm: 'sales',
+    cols: [
+      { c: 'A', label: 'Payment date', type: 'date', req: true },
+      { c: 'B', label: 'Engine no', type: 'sold', req: true },
+      { c: 'C', label: 'Customer', type: 'auto' },
+      { c: 'D', label: 'Amount', type: 'money', req: true },
+      { c: 'E', label: 'Received in', type: 'list', list: 'accounts', req: true },
+      { c: 'F', label: 'UTR / reference no', type: 'text', refOf: 'E', amountOf: 'D' },
+      { c: 'G', label: 'Remarks', type: 'text' },
+    ],
+    list: ['A', 'C', 'B', 'D', 'E', 'F', 'G'],
   },
 };
 

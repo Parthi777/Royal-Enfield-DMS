@@ -71,7 +71,8 @@ const auth = (check) => (req, res, next) => {
   next();
 };
 const can = (key, level) => (u, req) => rank(u.perms[typeof key === 'function' ? key(req) : key]) >= rank(level);
-const sheetKey = (req) => req.params.key;
+// a sheet's access level comes from its own section, or the section it belongs to (Sale Payments -> Vehicle Sales)
+const sheetKey = (req) => SHEETS[req.params.key]?.perm || req.params.key;
 const sameOrigin = (req, res, next) => (req.get('X-RE-App') === '1' ? next() : res.status(400).json({ error: 'Bad request' }));
 
 // ---------- public ----------
@@ -122,24 +123,28 @@ app.post('/api/auth/password', sameOrigin, auth(), (req, res, next) => {
 app.get('/api/me', auth(), (req, res) => res.json({ user: req.user, demo }));
 
 app.get('/api/bootstrap', auth(), wrap(async (req, res) => {
-  const [{ lists }, all] = await Promise.all([data.masters(), data.engines()]);
+  const [{ lists }, all, soldAll] = await Promise.all([data.masters(), data.engines(), data.soldList()]);
+  const sold = rank(req.user.perms.sales) >= rank('view') ? soldAll : [];
   // bike purchase values are dealer cost: only for roles that can open Vehicle Stock
   const engines = rank(req.user.perms.stock) >= rank('view') ? all : all.map(({ value, ...e }) => e);
-  res.json({ user: req.user, schema: SHEETS, modules: MODULES, levels: LEVELS, lists, engines, demo, showroom: SHOWROOM, persistent: accounts.persistent });
+  res.json({ user: req.user, schema: SHEETS, modules: MODULES, levels: LEVELS, lists, engines, sold, demo, showroom: SHOWROOM, persistent: accounts.persistent });
 }));
 
 app.get('/api/dashboard', auth(can('dashboard', 'view')), wrap(async (req, res) => {
   const d = await data.dashboard();
-  // money in the bank, transfers and expenses only for roles that can see the Bank Ledger
+  // cash and bank balances, deposits and expenses only for roles that can see the Bank Ledger
   if (rank(req.user.perms.ledger) < rank('view')) {
-    const hide = new Set(['BANK DEPOSIT', 'BANK TRANSFER', 'OPENING BALANCE', 'CLOSING BALANCE', 'CASH + BANK BALANCE', 'EXPENSES PAID · MONTH']);
-    d.today = d.today.filter((t) => !hide.has(t.label));
-    d.month = d.month.filter((t) => !hide.has(t.label));
-    d.bank = []; d.bankTotal = null; d.expenses = []; d.restricted = true;
+    for (const p of [d.today, d.month]) { delete p.cash; delete p.bank; delete p.accounts; delete p.expenses; delete p.expenseCount; delete p.deposit; delete p.depositCount; }
+    d.expenses = []; d.days = []; d.unposted = null; d.restricted = true;
   }
   res.json(d);
 }));
 app.get('/api/ledger', auth(can('ledger', 'view')), wrap(async (req, res) => res.json(await data.ledger())));
+// day book: every entry of one day across cash and bank, with opening and closing balances
+app.get('/api/daybook', auth(can('ledger', 'view')), wrap(async (req, res) => {
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(req.query.date || '') ? req.query.date : new Date(Date.now() + 330 * 60000).toISOString().slice(0, 10);
+  res.json(await data.daybook(date));
+}));
 // Masters: dropdown lists (models, variants, colours, accounts…)
 app.get('/api/masters', auth(can('masters', 'view')), wrap(async (req, res) => res.json(await data.masterPage())));
 app.put('/api/masters/:list', sameOrigin, auth(can('masters', 'edit')), wrap(async (req, res) => {
