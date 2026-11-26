@@ -114,7 +114,7 @@ Every list has **Export → Excel / PDF**: stock, bookings, sales, sale payments
 
 ## Demo mode
 
-Without `GOOGLE_SERVICE_ACCOUNT_JSON` (or with `DEMO_MODE=true`), the app runs on sample data kept in memory. Sign-in, roles and reports all work, but entries are not saved to the sheet.
+Without `GOOGLE_SERVICE_ACCOUNT_JSON` (or with `DEMO_MODE=true`), the app starts empty and keeps entries in memory only: they are lost when the app restarts. Sign-in, roles and reports all work, but nothing is saved to the sheet. A note in the side menu says so.
 
 ## Connect your Google Sheet
 

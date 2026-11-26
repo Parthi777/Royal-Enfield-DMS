@@ -194,7 +194,7 @@
           <div class="side-brand"><img src="/brand/logo-160.png" alt="" width="64" height="64"><div><b>${esc(S.showroom)}</b><span>Royal Enfield dealer</span></div></div>
           <nav class="nav">${NAV.map(([sec, items]) => { const ok = items.filter((i) => navAllowed(i[3])); return ok.length ? (sec ? `<div class="sec">${sec}</div>` : '') + ok.map(([href, label, icon]) =>
             `<a href="${href}" class="${route.startsWith(href) ? 'on' : ''}">${ic(icon)}<span>${label}</span>${href === '#/approvals' && S.pendingCount ? `<span class="badge">${S.pendingCount}</span>` : ''}</a>`).join('') : ''; }).join('')}</nav>
-          ${S.demo ? '<div class="side-note">Demo data: entries are not saved to the Google Sheet.</div>' : ''}
+          ${S.demo ? '<div class="side-note">Not connected to the Google Sheet yet. Entries are kept only until the app restarts.</div>' : ''}
         </aside>
         <main class="main">
           <header class="topbar">
