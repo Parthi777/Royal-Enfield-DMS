@@ -80,7 +80,8 @@
   function authCard(inner) {
     $app.innerHTML = `<div class="login"><header class="login-side"><div class="login-logo"><img src="/brand/logo.png" alt="${esc(S.showroom || 'Pradhanaa Motors LLP')} logo"></div>
       <div><div class="login-brand">${esc(S.showroom || 'Pradhanaa Motors LLP')}</div>
-      <p>Stock, bookings, sales, service and accounts for the showroom, in one place.</p></div></header>
+      <div class="login-sub">Royal Enfield dealer</div>
+      <p>The showroom's daily register: vehicles in stock, bookings, deliveries, customer payments, service bills, and the day's cash and bank.</p></div></header>
       <main class="login-main"><div class="login-card">${inner}</div></main></div>`;
     linkLabels($app);
   }
@@ -97,14 +98,14 @@
     if (cfg.needsSetup) return renderSetup(error);
     authCard(`
       <h1>Sign in</h1>
-      <p class="muted">Use the username and password the Admin gave you.</p>
+      <p class="muted">Staff only. Use the username and password your Admin set up for you.</p>
       <form id="lf" novalidate>
         <div class="field"><label for="username">Username</label><input id="username" name="username" autocomplete="username" autocapitalize="none" spellcheck="false" required></div>
         ${pwField('password', 'Password', 'current-password')}
         ${error ? `<div class="form-err">${ic('alert')}<span>${esc(error)}</span></div>` : ''}
         <button class="btn primary block" type="submit">Sign in</button>
       </form>
-      <div class="login-foot">Forgot your password? Ask the Admin to reset it.</div>`);
+      <div class="login-foot">Forgot your password? Your Admin can reset it from Users &amp; Roles.</div>`);
     wirePw();
     document.getElementById('username').focus();
     document.getElementById('lf').onsubmit = async (e) => {
@@ -116,15 +117,15 @@
   }
   function renderSetup(error) {
     authCard(`
-      <h1>Create the Admin account</h1>
-      <p class="muted">First time only. The setup code is in the Railway deploy logs of this app.</p>
+      <h1>Set up the Admin account</h1>
+      <p class="muted">This is done once. Enter the setup code from the Railway deploy logs, then choose the Admin's name, username and password. The Admin adds everyone else.</p>
       <form id="sf" novalidate>
         <div class="field"><label for="code">Setup code</label><input id="code" name="code" placeholder="XXXX-XXXX" autocomplete="off" required></div>
         <div class="field"><label for="name">Your name</label><input id="name" name="name" autocomplete="name" required></div>
         <div class="field"><label for="username">Username</label><input id="username" name="username" autocomplete="username" autocapitalize="none" spellcheck="false" required></div>
         ${pwField('password', 'Password (at least 6 characters)', 'new-password')}
         ${error ? `<div class="form-err">${ic('alert')}<span>${esc(error)}</span></div>` : ''}
-        <button class="btn primary block" type="submit">Create Admin and sign in</button>
+        <button class="btn primary block" type="submit">Create Admin account</button>
       </form>`);
     wirePw();
     document.getElementById('sf').onsubmit = async (e) => {
@@ -176,7 +177,7 @@
   // ---------- shell ----------
   const NAV = [
     ['', [['#/dashboard', 'Dashboard', 'dash', 'dashboard']]],
-    ['Showroom', [['#/s/stock', 'Vehicle Stock', 'stock', 'stock'], ['#/s/bookings', 'Bookings', 'bookings', 'bookings'], ['#/s/sales', 'Vehicle Sales', 'sales', 'sales'], ['#/s/payments', 'Sale Payments', 'payments', 'sales'], ['#/s/service', 'Service', 'service', 'service']]],
+    ['Showroom', [['#/s/stock', 'Vehicle Stock', 'stock', 'stock'], ['#/s/bookings', 'Bookings', 'bookings', 'bookings'], ['#/s/sales', 'Vehicle Sales', 'sales', 'sales'], ['#/s/service', 'Service', 'service', 'service']]],
     ['Accounts', [['#/s/expenses', 'Expenses', 'expenses', 'expenses'], ['#/s/bank', 'Bank Entries', 'bank', 'bank'], ['#/daybook', 'Day Book', 'daybook', 'ledger'], ['#/ledger', 'Bank Ledger', 'ledger', 'ledger']]],
     ['Control', [['#/approvals', 'Edit Requests', 'approvals', '@approvals'], ['#/masters', 'Masters', 'masters', 'masters'], ['#/access', 'Users & Roles', 'roles', '@users']]],
   ];
@@ -252,7 +253,7 @@
     // business cards and money cards for one period (today or this month)
     const business = (P, when) => `
       <div class="panel strip" style="--n:5">
-        ${stat('Bikes sold', P.sold, `HP ${P.hp} · Cash ${P.cashSales}`)}
+        ${stat('Vehicles sold', P.sold, `HP ${P.hp} · Cash ${P.cashSales}`)}
         ${stat('Sales value', P.salesValue, 'on-road price', true)}
         ${stat('New bookings', P.bookings, P.advance ? `${inr(P.advance, false)} advance` : 'no advance')}
         ${stat('Service billed', P.serviceValue, `${P.service} ${P.service === 1 ? 'job' : 'jobs'}`, true)}
@@ -277,7 +278,7 @@
     const models = d.models.filter((m) => m.available + m.allotted + m.waiting > 0);
     const maxModel = Math.max(0, ...models.map((m) => Math.max(m.available + m.allotted, m.waiting)));
     const maxExp = Math.max(0, ...d.expenses.map((e) => e.paid));
-    const old = d.ageing.slice(2).reduce((s, a) => s + a.bikes, 0);
+    const old = d.ageing.slice(2).reduce((s, a) => s + a.vehicles, 0);
     const maxDay = Math.max(0, ...d.days.map((x) => Math.max(x.in, x.out)));
     const accts = T.accounts || [];
 
@@ -315,7 +316,7 @@
             ${dds.length ? `<ul class="rows">${dds.map((b) => `<li><div class="who"><b>${esc(b.customer)}</b><small>${esc(b.model)} · ${esc(b.mobile)}</small></div><div class="amt"><b class="nowrap" style="color:var(--amber-d)">${inr(b.dd, false)}</b><small>sold ${fdate(b.date)}</small></div></li>`).join('')}</ul>` : '<div class="empty-line">No DD pending.</div>'}
           </div></div>
 
-          <div class="panel"><div class="panel-h"><h2>Bikes sold</h2><small>last 6 months</small></div><div class="panel-b">
+          <div class="panel"><div class="panel-h"><h2>Vehicles sold</h2><small>last 6 months</small></div><div class="panel-b">
             <ul class="rows">${d.months.map((m) => `<li><div style="width:72px" class="${m.sold ? '' : 'muted'}">${fmonth(m.month)}</div><div class="barline">${m.sold ? bar(m.sold, maxSold) : ''}</div><div class="amt" style="width:64px">${m.sold ? `<b>${m.sold}</b>` : '<span class="muted">–</span>'}</div><div class="amt muted" style="width:104px">${m.collections ? inr(m.collections, false) : ''}</div></li>`).join('')}</ul>
             <div class="muted" style="font-size:12.5px;margin-top:6px">Right column: money collected from customers that month.</div>
           </div></div>
@@ -324,14 +325,14 @@
         <div class="stack">
           <div class="panel"><div class="panel-h"><h2>Stock in showroom</h2><div class="grow"></div><a href="#/s/stock">Open stock</a></div>
             <div class="strip s3" style="--n:3;border-bottom:1px solid var(--line-2)">
-              ${stat('Bikes', inStock.length, `${allotted.length} allotted to bookings`)}
+              ${stat('Vehicles', inStock.length, `${allotted.length} allotted to bookings`)}
               ${canDo('stock', 'view') ? stat('Stock value', stockValue, 'purchase value', true) : stat('Open bookings', d.openBookings, `${d.allottedOpen} allotted`)}
               ${stat('Over 60 days', old, old ? '<span class="warn">sell these first</span>' : 'none ageing')}
             </div>
             <div class="panel-b" style="padding-top:8px">
             ${models.length ? `<ul class="rows">${models.map((m) => `<li><div class="who"><b>${esc(m.model)}</b><small>${m.available + m.allotted} in stock${m.allotted ? `, ${m.allotted} allotted` : ''}${m.waiting ? ` · <span style="color:${m.waiting > m.available ? 'var(--red-d)' : 'var(--amber-d)'}">${m.waiting} waiting</span>` : ''}</small></div>
               <div class="barline" style="display:grid;gap:4px">${bar(m.available + m.allotted, maxModel)}${m.waiting ? bar(m.waiting, maxModel, m.waiting > m.available ? 'red' : 'amber') : ''}</div></li>`).join('')}</ul>
-              <div class="muted" style="font-size:12.5px;margin-top:8px">Green is stock, amber is customers waiting for a bike. Red means order more.</div>` : '<div class="empty-line">No bikes in stock and nobody waiting.</div>'}
+              <div class="muted" style="font-size:12.5px;margin-top:8px">Green is stock, amber is customers waiting for a vehicle. Red means order more.</div>` : '<div class="empty-line">No vehicles in stock and nobody waiting.</div>'}
           </div></div>
 
           ${d.restricted ? '' : `<div class="panel"><div class="panel-h"><h2>Expenses</h2><small>${esc(monthName)}</small></div><div class="panel-b">
@@ -339,14 +340,14 @@
           </div></div>`}
 
           <div class="panel"><div class="panel-h"><h2>Sales mix</h2><small>${esc(monthName)}</small></div><div class="panel-b">
-            <ul class="rows">${d.mix.map((m) => `<li><div class="who"><b>${esc(m.mode === 'HP' ? 'Finance (HP)' : m.mode)}</b></div><div class="amt"><b>${m.count}</b> <span class="muted">${m.count === 1 ? 'bike' : 'bikes'}</span></div></li>`).join('')}
+            <ul class="rows">${d.mix.map((m) => `<li><div class="who"><b>${esc(m.mode === 'HP' ? 'Finance (HP)' : m.mode)}</b></div><div class="amt"><b>${m.count}</b> <span class="muted">${m.count === 1 ? 'vehicle' : 'vehicles'}</span></div></li>`).join('')}
             ${d.financiers.map((f) => `<li><div class="who"><small>${esc(f.name)}</small></div><div class="amt"><small style="display:inline">${f.count} · DD ${inr(f.dd, false)}</small></div></li>`).join('')}</ul>
           </div></div>
         </div>
       </div>`);
     document.getElementById('refresh').onclick = () => pageDashboard();
     const periodRows = (P) => [
-      ['Bikes sold', P.sold], ['HP / cash sales', `${P.hp} / ${P.cashSales}`], ['Sales value (on-road)', inr(P.salesValue, false)],
+      ['Vehicles sold', P.sold], ['HP / cash sales', `${P.hp} / ${P.cashSales}`], ['Sales value (on-road)', inr(P.salesValue, false)],
       ['New bookings', P.bookings], ['Booking advance', inr(P.advance, false)], ['Service billed', inr(P.serviceValue, false)],
       ['Collections from customers', inr(P.collections, false)],
       ...(d.restricted ? [] : [['Cash opening', inr(P.cash.opening, false)], ['Cash closing', inr(P.cash.closing, false)], ['Bank opening', inr(P.bank.opening, false)],
@@ -389,7 +390,7 @@
         <button class="icon-btn" id="dnext" aria-label="Next day" ${isToday ? 'disabled' : ''}>${ic('next')}</button>
         ${isToday ? '' : '<button class="btn" id="dtoday">Today</button>'}</div>` + exportBtn(), `
       <div class="db-cards">
-        ${card('Cash in hand', d.cash, 'cash')}
+        ${card('Cash', d.cash, 'cash')}
         ${card('Bank accounts', d.bank, 'bank')}
         ${card('Total', { opening: d.cash.opening + d.bank.opening, received: d.cash.received + d.bank.received, paid: d.cash.paid + d.bank.paid, closing: d.cash.closing + d.bank.closing }, 'total')}
       </div>
@@ -414,7 +415,7 @@
       title: 'Day Book', subtitle: longDate,
       sections: [
         { heading: 'Summary', columns: [{ label: '' }, { label: 'Opening', type: 'money' }, { label: 'Received', type: 'money' }, { label: 'Paid', type: 'money' }, { label: 'Closing', type: 'money' }],
-          rows: [['Cash in hand', d.cash.opening, d.cash.received, d.cash.paid, d.cash.closing], ['Bank accounts', d.bank.opening, d.bank.received, d.bank.paid, d.bank.closing]],
+          rows: [['Cash', d.cash.opening, d.cash.received, d.cash.paid, d.cash.closing], ['Bank accounts', d.bank.opening, d.bank.received, d.bank.paid, d.bank.closing]],
           totals: ['Total', d.cash.opening + d.bank.opening, d.cash.received + d.bank.received, d.cash.paid + d.bank.paid, d.cash.closing + d.bank.closing] },
         { heading: 'Entries', columns: [{ label: 'Particulars' }, { label: 'Type' }, { label: 'Account' }, { label: 'From' }, { label: 'Received', type: 'money' }, { label: 'Paid', type: 'money' }],
           rows: d.entries.map((e) => [e.text, KIND[e.kind][1], e.account, e.from, e.in || '', e.out || '']), totals: ['Total', '', '', '', tin, tout] },
@@ -473,7 +474,7 @@
     bank: [['all', 'All', () => true], ['month', 'This month', (r) => String(r.A).slice(0, 7) === todayIso().slice(0, 7)]],
     payments: [['all', 'All', () => true], ['month', 'This month', (r) => String(r.A).slice(0, 7) === todayIso().slice(0, 7)], ['today', 'Today', (r) => r.A === todayIso()]],
   };
-  const NEW_LABEL = { stock: 'Add bike', bookings: 'New booking', sales: 'New sale', payments: 'Add payment', service: 'New service bill', expenses: 'New expense', bank: 'New bank entry' };
+  const NEW_LABEL = { stock: 'Add vehicle', bookings: 'New booking', sales: 'New sale', payments: 'Add payment', service: 'New service bill', expenses: 'New expense', bank: 'New bank entry' };
 
   async function pageSheet(key) {
     const sh = S.schema[key];
@@ -506,7 +507,7 @@
       sales: (r) => [fdate(r.A), r.E, r.I, 'Cost ' + inr(r.Q), num(r.AI) > 0.5 ? 'Owes ' + inr(r.AI) : ''],
       payments: (r) => [fdate(r.A), inr(r.D), r.E, r.B, r.F ? 'UTR ' + r.F : ''],
       service: (r) => [fdate(r.A), r.C, r.D, inr(r.E)],
-      expenses: (r) => [fdate(r.A), r.D, r.E, num(r.F) ? '+' + inr(r.F) : '-' + inr(r.G)],
+      expenses: (r) => [fdate(r.A), r.C, r.D, inr(r.E)],
       bank: (r) => [fdate(r.A), r.B, r.D, num(r.E) ? '+' + inr(r.E) : '-' + inr(r.F)],
     };
     const count = (fn) => res.rows.filter(fn).length;
@@ -595,7 +596,7 @@
     // always open with the latest values and approval state
     try { S.data[key] = await api('GET', `/api/sheets/${key}`); if (key === 'sales') await loadSaleExtras(); } catch (e) { if (e.status === 401) return renderLogin(); }
     const rec = S.data[key].rows.find((r) => r._row === row);
-    if (rec) openForm(key, rec); else { toast('This entry was changed. Reloading…', true); renderSheet(key); }
+    if (rec) openForm(key, rec); else { toast('This entry was changed. Reloading…', true); pageSheet(key === 'payments' ? 'sales' : key); }
   }
 
   function engineOptions(key, cur, form) {
@@ -608,7 +609,7 @@
   }
 
   // amounts far above normal are usually a typing slip (an extra zero): ask before saving
-  const HIGH = { stock: { G: 1500000 }, bookings: { G: 500000 }, service: { E: 100000 }, expenses: { F: 500000, G: 500000 },
+  const HIGH = { stock: { G: 1500000 }, bookings: { G: 500000 }, service: { E: 100000 }, expenses: { E: 500000 },
     sales: { K: 1500000, AB: 1500000, AC: 1500000 }, payments: { D: 1500000 }, bank: { E: 5000000, F: 5000000 } };
   let salesBal = 0;
   function confirmUnusual(key, form, rec) {
@@ -662,7 +663,7 @@
       } else {
         input = `<input type="text" name="${c.c}" value="${esc(v)}" maxlength="200"${c.refOf ? ' placeholder="UTR / transaction ID" autocomplete="off" spellcheck="false"' : ''}>`;
       }
-      return `<div class="field"${hp}><label>${esc(c.label)}${req}</label>${input}</div>`;
+      return `<div class="field"${hp}><label>${esc(c.label)}${req}</label>${input}${c.hint ? `<small class="fhint">${esc(c.hint)}</small>` : ''}</div>`;
     };
 
     let notice = '';
@@ -671,7 +672,7 @@
     else if (!isNew && lockedAny && canDo(key, 'add')) notice = `<div class="notice info">${ic('lock')}<div>Saved values are locked. You can fill empty fields. To change a saved value, send an edit request to the Admin.</div></div>`;
     else if (!isNew && canDo(key, 'edit')) notice = `<div class="notice info">${ic('info')}<div>You can change saved values. Every change is written to the Edit Log with your name.</div></div>`;
 
-    const title = isNew ? NEW_LABEL[key] : (key === 'stock' ? `${rec.B} · ${rec.E}` : key === 'bank' ? rec.C : rec.B);
+    const title = isNew ? NEW_LABEL[key] : (key === 'stock' ? `${rec.B} · ${rec.E}` : key === 'bank' ? rec.C : key === 'payments' ? `Payment · ${rec.C || rec.B}` : rec.B);
     const d = drawer(`
       <div class="drawer-h"><div><h3>${esc(title)}</h3><small>${esc(sh.title)}${isNew ? '' : ' · sheet row ' + rec._row}</small></div><div class="grow"></div>
         <button class="icon-btn" data-close style="color:var(--navy)">${ic('x')}</button></div>
@@ -738,23 +739,50 @@
           set('E', e?.model); set('F', e?.variant); set('G', e?.colour); set('H', e?.frame);
         }
         const adv = !isNew ? num(rec.R) : (S.data.bookings?.rows || []).filter((b) => String(b.J) === String(form.D) && form.D).reduce((s, b) => s + num(b.G), 0);
-        const total = num(form.K) + num(form.L) + num(form.M) + num(form.N) + num(form.O) - num(form.P);
+        const docs = hp ? num(form.S) : 0;
+        const total = num(form.K) + num(form.L) + num(form.M) + num(form.N) + num(form.O) - num(form.P) + docs;
         const paid = adv + savedPays.reduce((s, p) => s + num(p.D), 0) + newPays.reduce((s, p) => s + num(p.D), 0);
         const dd = hp ? (form.AD ? num(form.AC) : num(form.AB)) : 0;
         const bal = total - paid - dd;
-        salesBal = bal;
+        salesBal = total ? bal : 0;
         const ddPend = hp && !form.AD ? num(form.AB) - num(form.AC) : 0;
         d.querySelector('#tally').innerHTML = `
-          <div><small>Total cost</small><b>${inr(total, false)}</b></div>
+          <div><small>${docs ? 'Total cost + doc charges' : 'Total cost'}</small><b>${inr(total, false)}</b></div>
           <div><small>Booking advance</small><b>${inr(adv, false)}</b></div>
           <div class="${ddPend >= 0.5 ? 'bad' : ''}"><small>DD pending</small><b>${inr(Math.max(0, ddPend), false)}</b></div>
-          <div class="${bal >= 0.5 ? 'bad' : ''}"><small>${bal < -0.5 ? 'Overpaid' : 'Customer balance'}</small><b>${inr(Math.abs(bal), false)}</b></div>`;
+          ${total ? `<div class="${bal >= 0.5 ? 'bad' : ''}"><small>${bal < -0.5 ? 'Overpaid' : 'Customer balance'}</small><b>${inr(Math.abs(bal), false)}</b></div>` : '<div><small>Customer balance</small><b>–</b></div>'}`;
       }
     };
     f.addEventListener('input', sync);
+    // a mobile number already in Bookings fills the customer (and, in a sale, the allotted engine)
+    let lastMob = '';
+    const findCustomer = (value) => {
+      const mob = String(value).replace(/\D/g, '');
+      if (mob.length !== 10 || mob === lastMob) return;
+      lastMob = mob;
+      const same = (S.data.bookings?.rows || []).filter((b) => String(b.C).replace(/\D/g, '') === mob).sort((a, b) => (a.A < b.A ? 1 : -1));
+      if (!same.length) return;
+      const fill = (c, v) => { const el = f.querySelector(`[name="${c}"]`); if (el && !el.value && v !== '' && v != null) el.value = v; };
+      if (key === 'bookings') {
+        const b = same[0];
+        fill('B', b.B);
+        toast(`Existing customer: ${b.B}. Last booking ${b.D} on ${fdate(b.A)}${b.M === 'Delivered' ? ', delivered' : ''}.`);
+      } else {
+        const b = same.find((x) => x.M !== 'Delivered');
+        if (!b) { fill('B', same[0].B); toast(`${same[0].B}: this customer's booking is already delivered.`); sync(); return; }
+        fill('B', b.B);
+        const sel = f.querySelector('[name="D"]');
+        const allotted = b.J && sel && [...sel.options].some((o) => o.value === String(b.J));
+        if (allotted && !sel.value) sel.value = b.J;
+        toast(allotted ? `Booking found: ${b.B}, ${b.D}. Engine ${b.J} and the advance ${inr(b.G)} are filled in.`
+          : `Booking found: ${b.B}, ${b.D}, advance ${inr(b.G)}. No vehicle allotted yet: pick the engine no.`);
+      }
+      sync();
+    };
+    if (isNew && (key === 'sales' || key === 'bookings')) f.addEventListener('input', (ev) => { if (ev.target.name === 'C') findCustomer(ev.target.value); });
     f.addEventListener('change', (ev) => {
       // typing a payment fills its date with today (still editable)
-      const dateFor = { S: 'T', V: 'W', Y: 'Z', AC: 'AD' }[ev.target.name];
+      const dateFor = { AC: 'AD' }[ev.target.name];
       if (key === 'sales' && dateFor && ev.target.value) {
         const de = f.querySelector(`[name="${dateFor}"]`);
         if (de && !de.value) de.value = todayIso();
@@ -806,7 +834,7 @@
         else toast(payList.length ? `${isNew ? 'Sale saved' : 'Saved'} with ${paid} ${paid === 1 ? 'payment' : 'payments'}` : isNew ? 'Saved to the sheet' : 'Changes saved');
         closeDrawer();
         await refreshCore();
-        pageSheet(key);
+        pageSheet(key === 'payments' ? 'sales' : key);
       } catch (e) { if (e.status === 401) { closeDrawer(); return renderLogin('Session expired: please sign in again.'); } toast(e.message, true); save.disabled = false; }
     };
     const rq = d.querySelector('#reqedit');
@@ -839,15 +867,17 @@
   // ---------- ledger ----------
   async function pageLedger() {
     loading('Bank Ledger');
-    const L = await api('GET', '/api/ledger');
+    const L0 = await api('GET', '/api/ledger');
+    // cash has its own book (Day Book); this page is bank accounts only
+    const L = { ...L0, accounts: L0.accounts.filter((x) => !/cash/i.test(x.account)) };
     S.ledgerAcc = S.ledgerAcc && L.accounts.some((a) => a.account === S.ledgerAcc) ? S.ledgerAcc : L.accounts[0]?.account;
     const a = L.accounts.find((x) => x.account === S.ledgerAcc) || { lines: [] };
     const total = L.accounts.reduce((s, x) => s + x.closing, 0);
-    shell('Bank Ledger', 'Every payment with an account posts here automatically', exportBtn(), `
-      ${L.unposted > 0 ? `<div class="notice warn">${ic('info')}<div><b>${inr(L.unposted)}</b> received without an account selected. Open the entry and pick "Received in".</div></div>` : ''}
+    shell('Bank Ledger', 'Bank accounts only. Cash is in the Day Book.', exportBtn(), `
+      ${L.unposted > 0 ? `<div class="notice warn">${ic('info')}<div><b>${inr(L.unposted)}</b> received without an account selected (bank and cash). Open the entry and pick "Received in".</div></div>` : ''}
       <div class="panel" style="margin-bottom:16px"><div class="tbl-wrap"><table><thead><tr><th>Account</th><th class="num hide-m">Opening</th><th class="num hide-m">Received</th><th class="num hide-m">Paid</th><th class="num">Closing</th></tr></thead><tbody>
         ${L.accounts.map((x) => `<tr class="click" data-acc="${esc(x.account)}"><td class="strong">${esc(x.account)}</td><td class="num hide-m">${inr(x.opening)}</td><td class="num in hide-m">${inr(x.received)}</td><td class="num out hide-m">${inr(x.paid)}</td><td class="num"><b>${inr(x.closing)}</b></td></tr>`).join('')}
-        <tr><td><b>Total cash and bank</b></td><td class="hide-m"></td><td class="hide-m"></td><td class="hide-m"></td><td class="num"><b>${inr(total)}</b></td></tr>
+        <tr><td><b>Total in bank</b></td><td class="hide-m"></td><td class="hide-m"></td><td class="hide-m"></td><td class="num"><b>${inr(total)}</b></td></tr>
       </tbody></table></div></div>
       <div class="tabs">${L.accounts.map((x) => `<button class="chip ${x.account === S.ledgerAcc ? 'on' : ''}" data-acc="${esc(x.account)}">${esc(x.account)}</button>`).join('')}</div>
       <div class="panel strip stat-row" style="--n:4"><div class="st"><div class="l">Opening</div><div class="v">${inr(a.opening, false)}</div></div><div class="st"><div class="l">Received</div><div class="v in">${inr(a.received, false)}</div></div><div class="st"><div class="l">Paid</div><div class="v out">${inr(a.paid, false)}</div></div><div class="st"><div class="l">Closing</div><div class="v">${inr(a.closing, false)}</div></div></div>
@@ -857,9 +887,9 @@
       </tbody></table></div>` : '<div class="empty">No entries for this account yet.</div>'}</div>`);
     document.querySelectorAll('[data-acc]').forEach((b) => b.onclick = () => { S.ledgerAcc = b.dataset.acc; pageLedger(); });
     wireExport(() => ({
-      title: `Bank Ledger · ${a.account}`, subtitle: `Statement of ${a.account} with all-account summary`,
+      title: `Bank Ledger · ${a.account}`, subtitle: `Statement of ${a.account} with all bank accounts`,
       sections: [
-        { heading: 'All accounts', columns: [{ label: 'Account' }, { label: 'Opening', type: 'money' }, { label: 'Received', type: 'money' }, { label: 'Paid', type: 'money' }, { label: 'Closing', type: 'money' }],
+        { heading: 'Bank accounts', columns: [{ label: 'Account' }, { label: 'Opening', type: 'money' }, { label: 'Received', type: 'money' }, { label: 'Paid', type: 'money' }, { label: 'Closing', type: 'money' }],
           rows: L.accounts.map((x) => [x.account, x.opening, x.received, x.paid, x.closing]),
           totals: ['Total', L.accounts.reduce((s2, x) => s2 + x.opening, 0), L.accounts.reduce((s2, x) => s2 + x.received, 0), L.accounts.reduce((s2, x) => s2 + x.paid, 0), total] },
         { heading: `${a.account} statement`, columns: [{ label: 'Date', type: 'date' }, { label: 'Particulars' }, { label: 'From' }, { label: 'In', type: 'money' }, { label: 'Out', type: 'money' }, { label: 'Balance', type: 'money' }],
@@ -1155,6 +1185,7 @@
   async function route() {
     closeDrawer();
     const h = location.hash || firstPage() || '#/dashboard';
+    if (h === '#/s/payments') { location.hash = '#/s/sales'; return; }  // payments live in the sale form
     const key = h.startsWith('#/s/') ? h.slice(4) : h === '#/ledger' || h === '#/daybook' ? 'ledger' : h === '#/access' ? '@users' : h === '#/approvals' ? '@approvals' : h === '#/masters' ? 'masters' : 'dashboard';
     if (!navAllowed(key)) return route404();
     try {

@@ -378,7 +378,7 @@ class DataService {
     }
     if (key === 'sales') {
       if (v.D && others.some((r) => String(r.D) === v.D)) throw httpError(400, 'This engine is already sold');
-      if (v.I === 'Cash' && (v.J || Number(v.AB) > 0 || Number(v.AC) > 0)) throw httpError(400, 'Cash sale: leave financier and DD empty');
+      if (v.I === 'Cash' && (v.J || Number(v.S) > 0 || Number(v.AB) > 0 || Number(v.AC) > 0)) throw httpError(400, 'Cash sale: leave financier, document charges and DD empty');
       if (v.I === 'HP' && !v.J) throw httpError(400, 'HP sale: pick the financier');
       if (Number(v.AC) > 0 && (!v.AD || !v.AE)) throw httpError(400, 'DD received needs a date and account');
     }
@@ -386,14 +386,9 @@ class DataService {
       if (Number(v.E) > 0 && Number(v.F) > 0) throw httpError(400, 'Fill only Credit or Debit, not both');
       if (v.G && v.G === v.B) throw httpError(400, 'Contra account cannot be the same account');
     }
-    if (key === 'expenses' && Number(v.F) > 0 && Number(v.G) > 0) throw httpError(400, 'Fill only Received or Paid, not both');
     // the same checks the sheet's Check column makes, enforced when the fields involved are saved
     const touch = (...cols) => !changed || cols.some((c) => c in changed);
-    if (key === 'expenses' && touch('C', 'F', 'G')) {
-      if (!(Number(v.F) > 0) && !(Number(v.G) > 0)) throw httpError(400, 'Enter the amount: Received for a Receipt, Paid for an Expense');
-      if (v.C === 'Receipt' && Number(v.G) > 0) throw httpError(400, 'A Receipt is money coming in: put the amount in Received, not Paid');
-      if (v.C === 'Expense' && Number(v.F) > 0) throw httpError(400, 'An Expense is money going out: put the amount in Paid, not Received');
-    }
+    if (key === 'expenses' && touch('E') && !(Number(v.E) > 0)) throw httpError(400, 'Enter the amount paid');
     if (key === 'bank' && touch('E', 'F') && !(Number(v.E) > 0) && !(Number(v.F) > 0)) throw httpError(400, 'Enter the amount in Credit / in or Debit / out');
     if (key === 'bookings' && touch('A', 'I') && v.I && v.A && String(v.I) < String(v.A)) throw httpError(400, 'Commitment date can\'t be before the booking date');
   }
@@ -415,7 +410,7 @@ class DataService {
     sp.forEach((r) => add(r.A, r.E, +r.D || 0, 0, `Sale payment – ${r.C || ''} (${r.B})${utr(r.F)}${r.G ? ' · ' + r.G : ''}`, `Sale Payments · row ${r._row}`, 'receipt', ['payments', r._row]));
     sl.forEach((r) => add(r.AD, r.AE, +r.AC || 0, 0, `Finance DD – ${r.B} (${r.J || 'HP'})`, `Vehicle Sales · row ${r._row}`, 'receipt', ['sales', r._row]));
     sv.forEach((r) => add(r.A, r.F, +r.E || 0, 0, `Service – ${r.B} ${r.C}`.trim() + utr(r.G), `Service · row ${r._row}`, 'receipt', ['service', r._row]));
-    ex.forEach((r) => add(r.A, r.E, +r.F || 0, +r.G || 0, `${r.B} [${r.D}]`, `Expenses · row ${r._row}`, +r.F > 0 ? 'receipt' : 'payment', ['expenses', r._row]));
+    ex.forEach((r) => add(r.A, r.D, 0, +r.E || 0, `${r.B} [${r.C}]${r.F ? ' · ' + r.F : ''}`, `Expenses · row ${r._row}`, 'payment', ['expenses', r._row]));
     be.forEach((r) => {
       const kind = r.G ? 'contra' : +r.E > 0 ? 'receipt' : 'payment';
       add(r.A, r.B, +r.E || 0, +r.F || 0, `${r.C} [${r.D}]`, `Bank Entries · row ${r._row}`, kind, ['bank', r._row]);
@@ -475,7 +470,7 @@ class DataService {
 
     const period = (pick, from) => {
       const sales = sl.filter((r) => pick(r.A)), books = bk.filter((r) => pick(r.A)), svc = sv.filter((r) => pick(r.A));
-      const exps = ex.filter((r) => pick(r.A) && +r.G > 0);
+      const exps = ex.filter((r) => pick(r.A) && +r.E > 0);
       const deposits = be.filter((r) => pick(r.A) && r.D === 'Cash Deposit');
       const collections = sum(bk.filter((r) => pick(r.A)), (r) => r.G) + sum(sp.filter((r) => pick(r.A)), (r) => r.D)
         + sum(sl.filter((r) => pick(r.AD)), (r) => r.AC) + sum(svc, (r) => r.E);
@@ -484,7 +479,7 @@ class DataService {
         sold: sales.length, hp: sales.filter((r) => r.I === 'HP').length, cashSales: sales.filter((r) => r.I === 'Cash').length,
         salesValue: sum(sales, (r) => r.Q), bookings: books.length, advance: sum(books, (r) => r.G),
         service: svc.length, serviceValue: sum(svc, (r) => r.E), collections,
-        expenses: sum(exps, (r) => r.G), expenseCount: exps.length,
+        expenses: sum(exps, (r) => r.E), expenseCount: exps.length,
         deposit: sum(deposits, (r) => (+r.E || 0) + (+r.F || 0)), depositCount: deposits.length,
         cash: group(bal, true), bank: group(bal, false), accounts: bal,
       };
@@ -525,11 +520,11 @@ class DataService {
     const mix = ['Cash', 'HP'].map((mode) => ({ mode, count: monthSales.filter((r) => r.I === mode).length }));
     const financiers = [...new Set(monthSales.filter((r) => r.I === 'HP' && r.J).map((r) => r.J))]
       .map((n) => ({ name: n, count: monthSales.filter((r) => r.J === n).length, dd: sum(monthSales.filter((r) => r.J === n), (r) => r.AB) }));
-    const expenses = [...new Set(ex.filter((r) => inMonth(r.A) && +r.G > 0).map((r) => r.D))]
-      .map((c) => ({ category: c, paid: sum(ex.filter((r) => inMonth(r.A) && r.D === c), (r) => r.G) })).sort((a, b) => b.paid - a.paid);
+    const expenses = [...new Set(ex.filter((r) => inMonth(r.A) && +r.E > 0).map((r) => r.C))]
+      .map((c) => ({ category: c, paid: sum(ex.filter((r) => inMonth(r.A) && r.C === c), (r) => r.E) })).sort((a, b) => b.paid - a.paid);
     const instock = st.filter((r) => r.H === 'Available' || r.H === 'Allotted');
-    const ageing = [{ label: '0–30 days', bikes: instock.filter((r) => +r.J <= 30).length }, { label: '31–60 days', bikes: instock.filter((r) => +r.J > 30 && +r.J <= 60).length },
-      { label: '61–90 days', bikes: instock.filter((r) => +r.J > 60 && +r.J <= 90).length }, { label: 'Over 90 days', bikes: instock.filter((r) => +r.J > 90).length }];
+    const ageing = [{ label: '0–30 days', vehicles: instock.filter((r) => +r.J <= 30).length }, { label: '31–60 days', vehicles: instock.filter((r) => +r.J > 30 && +r.J <= 60).length },
+      { label: '61–90 days', vehicles: instock.filter((r) => +r.J > 60 && +r.J <= 90).length }, { label: 'Over 90 days', vehicles: instock.filter((r) => +r.J > 90).length }];
 
     return {
       reportDate: today, today: T, month: M, unposted: L.unposted,

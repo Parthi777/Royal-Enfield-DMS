@@ -23,7 +23,7 @@ A web app for the Royal Enfield showroom on top of the **RE Showroom Google Shee
   - Five wrong passwords lock that username for 10 minutes. Ten wrong setup codes lock setup for 10 minutes.
   - **Sign out** ends that session even if the cookie was copied. **Sign out of all devices** (in the user menu) ends every session.
   - Resetting someone's password or turning their account off signs them out everywhere.
-  - Bike purchase values are sent only to roles that can view Vehicle Stock.
+  - Vehicle purchase values are sent only to roles that can view Vehicle Stock.
   - The site sends Content-Security-Policy, HSTS and Permissions-Policy headers.
 
 ### First start: create the Admin
@@ -46,17 +46,21 @@ Users and roles are saved in `accounts.json` in the app's data folder.
 
 - **Renaming:** renaming an item also changes it in every saved entry, so old entries still match. For example, renaming "Bank A/c 1" to "HDFC CA 4521" keeps its ledger.
 - **Removing:** a removed item leaves the dropdown, and saved entries keep the old name. An account that has saved entries can't be removed: rename it instead.
-- **Fixed names:** some names are used by the sheet's formulas: Cash in Hand, Paid/Free, Cash Deposit/Transfer, Cash/HP and Receipt/Expense. They can't be renamed or removed.
+- **Fixed names:** some names are used by the sheet's formulas: Cash, Paid/Free, Cash Deposit/Transfer and Cash/HP. They can't be renamed or removed.
 - **Limits:** the sheet's dashboard has room for 20 models, 12 accounts, 16 financiers and 13 expense categories.
 - **Edit Log:** every change is recorded there.
 - **Access:** set it per role under Users & Roles (No access, View or Edit). The Admin always has Edit.
 
-## Customer payments (Sale Payments)
+## Vehicle Sales
 
-A sale can take any number of payments. In the sale form, **Customer payments → Add payment** adds a row: date, amount, account (Cash in Hand or a bank) and the UTR for bank payments. Saving the sale saves the payments too. Each payment is one row in the **Sale Payments** tab, linked to the sale by engine number, and can also be added later from the Sale Payments page.
+- **Customer lookup:** type the mobile number first. If that customer has an open booking, the name, the allotted engine and the booking advance fill in by themselves. In Bookings, a repeat customer's name fills in the same way.
+- **Customer payments:** in the sale form, **Customer payments → Add payment** adds a row: date, amount, account (Cash or a bank) and the UTR for bank payments. Any number of payments. Each one is saved as a row in the sheet's **Sale Payments** tab, linked by engine number. There is no separate page: open a saved payment from its sale.
+- **HP sales:** Document charges (column S) collected from the customer add to what the customer owes. DD sanctioned, DD received, date and account as before.
+- Customer paid (AF) = booking advance + every payment. Customer balance (AI) = vehicle cost + document charges − customer paid − DD.
 
-- Customer paid (Vehicle Sales, AF) = booking advance + every payment for that engine.
-- Each payment shows in the bank ledger and the day book under its own date and account.
+## Expenses
+
+Expenses are money going out only: date, particulars, category, **Paid from** (Cash or a bank), amount, bill / UTR no, remarks. Money coming into cash from the office goes in **Bank Entries** (Account = Cash, Type = Cash from Office).
 
 ## Payment reference (UTR)
 
@@ -70,28 +74,32 @@ Cash payments don't need one. The UTR also shows in the bank ledger and day book
 
 ## Day Book
 
-**Day Book** shows one day at a time: every receipt (money in) and payment (money out) with its account, then cash in hand and bank accounts with opening balance, received, paid and closing balance, and the same for each account. Use the arrows or the date box to move between days. Exports to Excel and PDF.
+**Day Book** shows one day at a time: every receipt (money in) and payment (money out) with its account, then cash and bank accounts with opening balance, received, paid and closing balance, and the same for each account. Use the arrows or the date box to move between days. Exports to Excel and PDF.
+
+## Bank Ledger
+
+The Bank Ledger page shows bank accounts only: a statement per account with opening, received, paid and closing. Cash is in the Day Book.
 
 ## Dashboard
 
 - **Today:** sales, bookings, service, collections; then cash opening and closing, bank opening and closing, bank deposits and expenses.
 - **This month:** the same figures for the month so far.
-- **Below:** the cash and bank account table, then charts (money in and out by day, follow-ups, bikes sold, stock, expenses, sales mix).
+- **Below:** the cash and bank account table, then charts (money in and out by day, follow-ups, vehicles sold, stock, expenses, sales mix).
 
 Roles without Bank Ledger access see the sales and bookings figures only.
 
 ## Stock status
 
-A booking with an engine number marks that bike **Allotted** in Vehicle Stock; a sale marks it **Sold** and the booking **Delivered**. The sheet's old Check columns were removed: the app refuses those entries instead (see below).
+A booking with an engine number marks that vehicle **Allotted** in Vehicle Stock; a sale marks it **Sold** and the booking **Delivered**. The sheet's old Check columns were removed: the app refuses those entries instead (see below).
 
 ## Checks on entries
 
 - **Dates:** impossible dates such as 31 Feb are refused.
 - **Refused entries:**
-  - a Receipt with a Paid amount, or an Expense with a Received amount
   - an expense or bank entry with no amount
+  - a cash sale with financier, document charges or DD filled
   - a commitment date before the booking date
-  - a payment for a bike that hasn't been sold, or a bank payment without its UTR
+  - a payment for a vehicle that hasn't been sold, or a bank payment without its UTR
 - **Confirmations:** amounts far above normal ask before saving, for example a booking advance over ₹5 lakh. So do sales payments above the vehicle cost.
 - **Edit requests:** an approval can be withdrawn, and a rejected request can't be reopened.
 

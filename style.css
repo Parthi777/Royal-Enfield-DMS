@@ -30,7 +30,8 @@ a { color: var(--teal-d); text-decoration: none; } a:hover { text-decoration: un
 .login-logo { width: 188px; height: 188px; border-radius: 50%; background: #fff; padding: 10px; box-shadow: 0 0 0 6px rgba(255,255,255,.06); }
 .login-logo img { width: 100%; height: 100%; display: block; }
 .login-brand { font-size: 28px; font-weight: 600; letter-spacing: -.01em; line-height: 1.2; }
-.login-side p { color: #B4B4BC; font-size: 15px; max-width: 34ch; margin: 12px 0 0; }
+.login-sub { color: #D6D6DC; font-size: 14px; margin-top: 4px; }
+.login-side p { color: #B4B4BC; font-size: 15px; line-height: 1.55; max-width: 36ch; margin: 16px 0 0; }
 .login-main { display: grid; place-items: center; padding: 32px 24px; }
 .login-card { width: 100%; max-width: 360px; }
 .login-card h1 { font-size: 24px; font-weight: 600; margin: 0 0 6px; letter-spacing: -.01em; }
@@ -131,6 +132,7 @@ a { color: var(--teal-d); text-decoration: none; } a:hover { text-decoration: un
 .check input { width: 18px; height: 18px; margin: 2px 0 0; accent-color: var(--teal); flex: none; }
 .check b { display: block; font-weight: 500; } .check small { color: var(--muted); font-size: 12.5px; }
 .hint { font-size: 12.5px; color: var(--muted); margin: 8px 0 0; }
+.fhint { display: block; font-size: 12px; color: var(--muted); margin-top: 4px; line-height: 1.35; }
 .drawer-f .grow { flex: 1; }
 
 /* ---------- buttons & inputs ---------- */

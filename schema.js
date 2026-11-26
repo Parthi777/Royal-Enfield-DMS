@@ -27,8 +27,8 @@ const SHEETS = {
     name: 'Bookings', title: 'Bookings', icon: 'calendar', last: 'P', key: 'B',
     cols: [
       { c: 'A', label: 'Booking date', type: 'date', req: true },
-      { c: 'B', label: 'Customer name', type: 'text', req: true },
       { c: 'C', label: 'Mobile no', type: 'phone', req: true },
+      { c: 'B', label: 'Customer name', type: 'text', req: true },
       { c: 'D', label: 'Model', type: 'list', list: 'models', req: true },
       { c: 'E', label: 'Variant', type: 'list', list: 'variants' },
       { c: 'F', label: 'Colour', type: 'list', list: 'colours' },
@@ -48,9 +48,9 @@ const SHEETS = {
   sales: {
     name: 'Vehicle Sales', title: 'Vehicle Sales', icon: 'receipt', last: 'AK', key: 'B',
     groups: [
-      { title: 'Customer & bike', cols: ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J'] },
+      { title: 'Customer & vehicle', cols: ['A', 'C', 'B', 'D', 'E', 'F', 'G', 'H', 'I', 'J'] },
       { title: 'Vehicle cost', cols: ['K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R'] },
-      { title: 'Finance DD (HP only)', cols: ['AB', 'AC', 'AD', 'AE'], hpOnly: true },
+      { title: 'Finance (HP only)', cols: ['S', 'AB', 'AC', 'AD', 'AE'], hpOnly: true },
       { title: 'Tally', cols: ['AF', 'AG', 'AH', 'AI', 'AJ', 'AK'] },
     ],
     cols: [
@@ -72,6 +72,7 @@ const SHEETS = {
       { c: 'P', label: 'Discount', type: 'money' },
       { c: 'Q', label: 'Total vehicle cost', type: 'auto', money: true },
       { c: 'R', label: 'Booking advance', type: 'auto', money: true },
+      { c: 'S', label: 'Document charges', type: 'money', hpOnly: true, hint: 'Collected from the customer for the financier' },
       { c: 'AB', label: 'DD sanctioned', type: 'money', hpOnly: true },
       { c: 'AC', label: 'DD received', type: 'money', hpOnly: true },
       { c: 'AD', label: 'DD received date', type: 'date', hpOnly: true },
@@ -99,18 +100,17 @@ const SHEETS = {
     list: ['A', 'B', 'C', 'D', 'E', 'F'],
   },
   expenses: {
-    name: 'Expenses', title: 'Expenses', icon: 'wallet', last: 'H', key: 'B',
+    name: 'Expenses', title: 'Expenses', icon: 'wallet', last: 'G', key: 'B',
     cols: [
       { c: 'A', label: 'Date', type: 'date', req: true },
-      { c: 'B', label: 'Particulars', type: 'text', req: true },
-      { c: 'C', label: 'Entry type', type: 'list', list: 'entryTypes', req: true },
-      { c: 'D', label: 'Category', type: 'list', list: 'expenseCats', req: true },
-      { c: 'E', label: 'Account', type: 'list', list: 'accounts', req: true },
-      { c: 'F', label: 'Received', type: 'money' },
-      { c: 'G', label: 'Paid', type: 'money' },
-      { c: 'H', label: 'Running balance', type: 'auto', money: true },
+      { c: 'B', label: 'Particulars', type: 'text', req: true, hint: 'What was paid for, e.g. Tea for staff' },
+      { c: 'C', label: 'Category', type: 'list', list: 'expenseCats', req: true },
+      { c: 'D', label: 'Paid from', type: 'list', list: 'accounts', req: true },
+      { c: 'E', label: 'Amount', type: 'money', req: true },
+      { c: 'F', label: 'Bill / UTR no', type: 'text' },
+      { c: 'G', label: 'Remarks', type: 'text' },
     ],
-    list: ['A', 'B', 'C', 'D', 'E', 'F', 'G'],
+    list: ['A', 'B', 'C', 'D', 'E', 'F'],
   },
   bank: {
     name: 'Bank Entries', title: 'Bank Entries', icon: 'bank', last: 'G', key: 'C',
@@ -144,23 +144,22 @@ const SHEETS = {
 // Masters tab: column -> list name
 const MASTERS = {
   A: 'models', B: 'variants', C: 'colours', D: 'financiers', E: 'expenseCats', F: 'modes',
-  G: 'serviceTypes', H: 'entryTypes', I: 'accounts', J: 'opening', K: 'bankTypes',
+  G: 'serviceTypes', I: 'accounts', J: 'opening', K: 'bankTypes',
 };
 
 // What the Masters page can edit. max = rows the sheet's own formulas and dashboard cover.
 // fixed = names the sheet's formulas look for: they can't be renamed or removed.
 // locked = the whole list is fixed (the sheet's rules only know these values).
 const MASTER_LISTS = [
-  { key: 'models', label: 'Models', col: 'A', max: 20, hint: 'Bike models. Used in stock, bookings and sales.' },
+  { key: 'models', label: 'Models', col: 'A', max: 20, hint: 'Vehicle models. Used in stock, bookings and sales.' },
   { key: 'variants', label: 'Variants', col: 'B', max: 148, hint: 'Variants for any model.' },
   { key: 'colours', label: 'Colours', col: 'C', max: 148, hint: 'Colours for any model.' },
-  { key: 'accounts', label: 'Cash and bank accounts', col: 'I', opening: 'J', max: 12, fixed: ['Cash in Hand'], hint: 'Where money is received or paid from, with the opening balance of each.' },
+  { key: 'accounts', label: 'Cash and bank accounts', col: 'I', opening: 'J', max: 12, fixed: ['Cash'], hint: 'Where money is received or paid from, with the opening balance of each.' },
   { key: 'financiers', label: 'Financiers', col: 'D', max: 16, hint: 'Banks and finance companies for HP sales.' },
   { key: 'expenseCats', label: 'Expense categories', col: 'E', max: 13, hint: 'Categories for the Expenses tab.' },
   { key: 'serviceTypes', label: 'Service types', col: 'G', max: 148, fixed: ['Paid', 'Free'], hint: 'Types of service job.' },
   { key: 'bankTypes', label: 'Bank entry types', col: 'K', max: 148, fixed: ['Cash Deposit', 'Transfer'], hint: 'Types for the Bank Entries tab.' },
   { key: 'modes', label: 'Purchase modes', col: 'F', locked: true, hint: 'Cash or HP. The sheet\'s rules work with these two only.' },
-  { key: 'entryTypes', label: 'Expense entry types', col: 'H', locked: true, hint: 'Receipt or Expense. The sheet\'s rules work with these two only.' },
 ];
 
 const ROLES = ['Admin', 'Manager', 'Staff', 'Viewer'];

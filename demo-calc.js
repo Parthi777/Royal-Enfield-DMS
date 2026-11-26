@@ -1,6 +1,6 @@
 // Demo mode only. With the real Google Sheet, its formulas fill the grey (computed) columns.
 // Here we do the same in JavaScript after every change, so the demo behaves like the sheet:
-// a booking with an engine marks the bike Allotted, a sale marks it Sold and the booking Delivered, and so on.
+// a booking with an engine marks the vehicle Allotted, a sale marks it Sold and the booking Delivered, and so on.
 // Grid shape: { 'Sheet name': { '<row>': [values from column A] } }, dates as sheet serial numbers.
 
 const IST_MIN = 330;
@@ -25,7 +25,6 @@ function recompute(grid) {
   const bookings = rows(grid, 'Bookings');
   const sales = rows(grid, 'Vehicle Sales');
   const pays = rows(grid, 'Sale Payments');
-  const expenses = rows(grid, 'Expenses');
 
   const saleOf = new Map(), bookingOf = new Map();
   for (const s of sales) if (s.get('D') !== '' && !saleOf.has(String(s.get('D')))) saleOf.set(String(s.get('D')), s);
@@ -72,7 +71,7 @@ function recompute(grid) {
       const paid = N(R) + (d === '' ? 0 : pays.filter((p) => String(p.get('B')) === d).reduce((a, p) => a + N(p.get('D')), 0));
       const hp = s.get('I') === 'HP', ddDone = s.get('AD') !== '';
       const AH = hp ? (ddDone ? 0 : N(s.get('AB')) - N(s.get('AC'))) : '';
-      const AI = Q - paid - (hp ? (ddDone ? N(s.get('AC')) : N(s.get('AB'))) : 0);
+      const AI = Q + N(s.get('S')) - paid - (hp ? (ddDone ? N(s.get('AC')) : N(s.get('AB'))) : 0);
       s.set('AF', paid); s.set('AG', paid + N(s.get('AC'))); s.set('AH', AH); s.set('AI', AI);
       s.set('AJ', AI < -0.5 ? `OVERPAID ₹${inr(-AI)}` : AI < 0.5 && N(AH) < 0.5 ? 'FULLY PAID'
         : `${AI >= 0.5 ? `CUSTOMER OWES ₹${inr(AI)}` : ''}${N(AH) >= 0.5 ? `   DD PENDING ₹${inr(AH)}` : ''}`.trim());
@@ -86,13 +85,6 @@ function recompute(grid) {
     p.set('C', d === '' ? '' : saleOf.has(d) ? saleOf.get(d).get('B') : '⚠ Engine not sold');
   }
 
-  // Expenses: H running total of received - paid
-  let run = 0;
-  for (const e of expenses) {
-    if (e.get('F') === '' && e.get('G') === '') { e.set('H', ''); continue; }
-    run += N(e.get('F')) - N(e.get('G'));
-    e.set('H', run);
-  }
 }
 
 module.exports = { recompute };
