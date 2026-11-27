@@ -71,7 +71,7 @@ class DataService {
   }
 
   async masters(opts = {}) {
-    const [grid] = await this.get([`Masters!A3:K150`], opts);
+    const [grid] = await this.get([`Masters!A3:L150`], opts);
     const lists = {};
     Object.values(MASTERS).forEach((n) => (lists[n] = []));
     grid.forEach((row) => {
@@ -459,6 +459,9 @@ class DataService {
         throw httpError(400, `${what} went to ${acc}: enter its UTR / reference no (GPay, UPI, NEFT, card).`);
       }
     }
+    // who booked / sold it: required once the Admin has added executives in Masters
+    const ex = { bookings: 'Z', sales: 'AL' }[key];
+    if (ex && (ctx.lists.executives || []).length && !v[ex] && (!changed || ex in changed)) throw httpError(400, 'Pick the sales executive');
     if (key === 'bookings') {
       for (const [n, amt, acc, date] of [[2, 'Q', 'R', 'T'], [3, 'U', 'V', 'X']]) {
         if (changed && ![amt, acc, date, 'A'].some((k) => k in changed)) continue;
@@ -634,8 +637,16 @@ class DataService {
     const ageing = [{ label: '0–30 days', vehicles: instock.filter((r) => +r.J <= 30).length }, { label: '31–60 days', vehicles: instock.filter((r) => +r.J > 30 && +r.J <= 60).length },
       { label: '61–90 days', vehicles: instock.filter((r) => +r.J > 60 && +r.J <= 90).length }, { label: 'Over 90 days', vehicles: instock.filter((r) => +r.J > 90).length }];
 
+    // executive-wise this month: bookings taken, vehicles sold, and bookings still waiting for delivery
+    const execs = new Map();
+    const ex1 = (name) => { const k = name || 'Not set'; if (!execs.has(k)) execs.set(k, { name: k, bookings: 0, advance: 0, sold: 0, salesValue: 0, open: 0 }); return execs.get(k); };
+    bk.filter((r) => inMonth(r.A)).forEach((r) => { const e = ex1(r.Z); e.bookings++; e.advance += bookingTotal(r); });
+    sl.filter((r) => inMonth(r.A)).forEach((r) => { const e = ex1(r.AL); e.sold++; e.salesValue += +r.Q || 0; });
+    open.forEach((r) => { ex1(r.Z).open++; });
+    const executives = [...execs.values()].sort((a, b) => (a.name === 'Not set') - (b.name === 'Not set') || b.sold - a.sold || b.bookings - a.bookings || a.name.localeCompare(b.name));
+
     return {
-      reportDate: today, today: T, month: M, unposted: L.unposted,
+      reportDate: today, today: T, month: M, unposted: L.unposted, executives,
       openBookings: open.length, allottedOpen: open.filter((r) => r.J).length,
       customerDue: sum(balances, (b) => b.owes), ddPending: sum(balances, (b) => b.dd),
       overdue, balances, months, days, models, mix, financiers, expenses, ageing,

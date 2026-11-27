@@ -51,6 +51,12 @@ Users and roles are saved in `accounts.json` in the app's data folder.
 - **Edit Log:** every change is recorded there.
 - **Access:** set it per role under Users & Roles (No access, View or Edit). The Admin always has Edit.
 
+## Sales executives
+
+Add the executives' names in **Masters → Sales executives**. Every booking (column Z) and sale (column AL) then needs the executive who took it; a new entry is filled with the signed-in person's name if it is in the list, and a sale found by mobile number takes the executive from its booking. Entries saved before the list existed show as "Not set" and can be filled in (an empty field needs no approval).
+
+The Dashboard's **Sales executives** table shows, for this month, each executive's bookings, booking amount, vehicles sold, sales value, and open bookings waiting for delivery. It is in the Dashboard export too. Type a name in the search box on Bookings or Vehicle Sales to see that executive's entries.
+
 ## Bookings: split payments
 
 A booking amount can come in up to 3 payments (for example cash + GPay, or a second instalment later). Payment 1 is on the booking date; **+ Add payment** shows Payment 2 and then Payment 3, each with its own date, amount, account and UTR (needed for a bank). The **Booking amount** (column Y) is the total; the sale counts the total as the booking advance, and each payment goes to the Day Book and Bank Ledger on its own date and account.

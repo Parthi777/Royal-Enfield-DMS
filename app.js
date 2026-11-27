@@ -308,6 +308,12 @@
           <tr class="total"><td>Total</td><td class="num">${inr(T.cash.opening + T.bank.opening, false)}</td><td class="num">${inr(T.cash.received + T.bank.received)}</td><td class="num">${inr(T.cash.paid + T.bank.paid)}</td><td class="num">${inr(T.cash.closing + T.bank.closing, false)}</td></tr>
         </tbody></table></div>${d.unposted ? `<div class="notice warn" style="margin:12px 16px">${ic('alert')}<div>${inr(d.unposted, false)} was received without choosing an account, so it isn't in any balance.</div></div>` : ''}</div>`}
 
+      <div class="panel" style="margin-top:16px"><div class="panel-h"><h2>Sales executives</h2><small>${esc(monthName)}</small></div>
+        ${(d.executives || []).length ? `<div class="tbl-wrap"><table><thead><tr><th>Executive</th><th class="num">Bookings</th><th class="num hide-m">Booking amount</th><th class="num">Vehicles sold</th><th class="num hide-m">Sales value</th><th class="num">Waiting delivery</th></tr></thead><tbody>
+          ${d.executives.map((e) => `<tr><td class="strong${e.name === 'Not set' ? ' muted' : ''}">${esc(e.name)}</td><td class="num">${e.bookings || '<span class="muted">–</span>'}</td><td class="num hide-m">${inr(e.advance)}</td><td class="num">${e.sold || '<span class="muted">–</span>'}</td><td class="num hide-m">${inr(e.salesValue)}</td><td class="num">${e.open || '<span class="muted">–</span>'}</td></tr>`).join('')}
+          <tr class="total"><td>Total</td><td class="num">${d.executives.reduce((s, e) => s + e.bookings, 0)}</td><td class="num hide-m">${inr(d.executives.reduce((s, e) => s + e.advance, 0), false)}</td><td class="num">${d.executives.reduce((s, e) => s + e.sold, 0)}</td><td class="num hide-m">${inr(d.executives.reduce((s, e) => s + e.salesValue, 0), false)}</td><td class="num">${d.executives.reduce((s, e) => s + e.open, 0)}</td></tr>
+        </tbody></table></div>` : `<div class="empty">No bookings or sales this month yet.${(S.lists.executives || []).length ? '' : ' Add your executives\' names in Masters → Sales executives.'}</div>`}</div>
+
       <div class="section-h"><h2>Charts</h2></div>
       <div class="cols" style="margin-top:0">
         <div class="stack">
@@ -371,6 +377,8 @@
         { heading: `${monthLong} to date`, columns: [{ label: 'Item' }, { label: 'Value' }], rows: periodRows(M) },
         d.restricted ? null : { heading: 'Cash and bank accounts (today)', columns: [{ label: 'Account' }, { label: 'Opening', type: 'money' }, { label: 'Received', type: 'money' }, { label: 'Paid', type: 'money' }, { label: 'Closing', type: 'money' }],
           rows: accts.map((a) => [a.account, a.opening, a.received, a.paid, a.closing]), totals: ['Total', T.cash.opening + T.bank.opening, T.cash.received + T.bank.received, T.cash.paid + T.bank.paid, T.cash.closing + T.bank.closing] },
+        { heading: `Sales executives (${monthLong})`, columns: [{ label: 'Executive' }, { label: 'Bookings', type: 'num' }, { label: 'Booking amount', type: 'money' }, { label: 'Vehicles sold', type: 'num' }, { label: 'Sales value', type: 'money' }, { label: 'Waiting delivery', type: 'num' }],
+          rows: (d.executives || []).map((e) => [e.name, e.bookings, e.advance, e.sold, e.salesValue, e.open]) },
         { heading: 'Overdue bookings', columns: [{ label: 'Customer' }, { label: 'Mobile' }, { label: 'Model' }, { label: 'Promised', type: 'date' }, { label: 'Days late', type: 'num' }, { label: 'Advance', type: 'money' }],
           rows: d.overdue.map((o) => [o.customer, o.mobile, o.model, o.commitment, o.late, o.advance]) },
         { heading: 'Customer balance and DD pending', columns: [{ label: 'Customer' }, { label: 'Mobile' }, { label: 'Model' }, { label: 'Sold on', type: 'date' }, { label: 'Customer owes', type: 'money' }, { label: 'DD pending', type: 'money' }],
@@ -736,6 +744,7 @@
     const form = {};
     sh.cols.forEach((c) => (form[c.c] = isNew ? '' : rec[c.c]));
     if (isNew) sh.cols.forEach((c) => { if (c.type === 'date' && c.req) form[c.c] = todayIso(); });
+    if (isNew && (S.lists.executives || []).includes(S.user.name)) sh.cols.filter((c) => c.list === 'executives').forEach((c) => (form[c.c] = S.user.name));
     const canEdit = (c) => c.type !== 'auto' && canDo(key, 'add') && (isNew || form[c.c] === '' || rec[c.c] === '' || canDo(key, 'edit') || !!approved);
     const lockedAny = !isNew && sh.cols.some((c) => c.type !== 'auto' && rec[c.c] !== '' && !canEdit(c));
     const groups = sh.groups || [{ title: 'Details', cols: sh.cols.map((c) => c.c) }];
@@ -900,6 +909,7 @@
         const b = same.find((x) => x.M !== 'Delivered');
         if (!b) { fill('B', same[0].B); toast(`${same[0].B}: this customer's booking is already delivered.`); sync(); return; }
         fill('B', b.B);
+        if (b.Z) { const ex = f.querySelector('[name="AL"]'); if (ex && !ex.value) ex.value = b.Z; }
         const sel = f.querySelector('[name="D"]');
         const allotted = b.J && sel && [...sel.options].some((o) => o.value === String(b.J));
         if (allotted && !sel.value) sel.value = b.J;

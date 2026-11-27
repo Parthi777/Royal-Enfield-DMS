@@ -45,7 +45,8 @@
    "Payment 3 Received In",
    "Payment 3 UTR / Ref No",
    "Payment 3 Date",
-   "Booking Amount Total (₹)"
+   "Booking Amount Total (₹)",
+   "Sales Executive"
   ]
  },
  "Vehicle Sales": {
@@ -89,7 +90,8 @@
    "DD Pending (₹)",
    "Customer Balance (₹)",
    "Payment Status",
-   "Booking Type"
+   "Booking Type",
+   "Sales Executive"
   ]
  },
  "Sale Payments": {
@@ -162,7 +164,8 @@
    null,
    "Accounts (Cash + Banks)",
    "Opening Balance (₹)",
-   "Bank Entry Type"
+   "Bank Entry Type",
+   "Sales Executive"
   ],
   "3": [
    "Hunter 350",

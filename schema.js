@@ -24,9 +24,9 @@ const SHEETS = {
     list: ['A', 'B', 'C', 'D', 'E', 'G', 'H', 'I', 'J'],
   },
   bookings: {
-    name: 'Bookings', title: 'Bookings', icon: 'calendar', last: 'Y', key: 'B',
+    name: 'Bookings', title: 'Bookings', icon: 'calendar', last: 'Z', key: 'B',
     groups: [
-      { title: 'Customer & vehicle', cols: ['A', 'C', 'B', 'D', 'E', 'F', 'I', 'J'] },
+      { title: 'Customer & vehicle', cols: ['A', 'C', 'B', 'Z', 'D', 'E', 'F', 'I', 'J'] },
       { title: 'Payment 1', cols: ['G', 'H', 'P'] },
       { title: 'Payment 2', cols: ['T', 'Q', 'R', 'S'], extra: true },
       { title: 'Payment 3', cols: ['X', 'U', 'V', 'W'], extra: true },
@@ -53,6 +53,7 @@ const SHEETS = {
       { c: 'W', label: 'UTR / reference no', type: 'text', refOf: 'V', amountOf: 'U' },
       { c: 'I', label: 'Commitment date', type: 'date' },
       { c: 'J', label: 'Allotted engine no', type: 'engine', engineFor: 'booking' },
+      { c: 'Z', label: 'Sales executive', type: 'list', list: 'executives' },
       { c: 'Y', label: 'Booking amount', type: 'auto' },
       { c: 'K', label: 'Allotment', type: 'auto', status: true },
       { c: 'L', label: 'Stock for model', type: 'auto' },
@@ -60,12 +61,12 @@ const SHEETS = {
       { c: 'N', label: 'Days left', type: 'auto' },
       { c: 'O', label: 'Alert', type: 'auto', status: true },
     ],
-    list: ['A', 'B', 'C', 'D', 'Y', 'I', 'K', 'J', 'O'],
+    list: ['A', 'B', 'C', 'D', 'Z', 'Y', 'I', 'K', 'J', 'O'],
   },
   sales: {
-    name: 'Vehicle Sales', title: 'Vehicle Sales', icon: 'receipt', last: 'AK', key: 'B',
+    name: 'Vehicle Sales', title: 'Vehicle Sales', icon: 'receipt', last: 'AL', key: 'B',
     groups: [
-      { title: 'Customer & vehicle', cols: ['A', 'C', 'B', 'D', 'E', 'F', 'G', 'H', 'I', 'J'] },
+      { title: 'Customer & vehicle', cols: ['A', 'C', 'B', 'AL', 'D', 'E', 'F', 'G', 'H', 'I', 'J'] },
       { title: 'Vehicle cost', cols: ['K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R'] },
       { title: 'Finance (HP only)', cols: ['S', 'AB', 'AC', 'AD', 'AE'], hpOnly: true },
       { title: 'Tally', cols: ['AF', 'AG', 'AH', 'AI', 'AJ', 'AK'] },
@@ -100,8 +101,9 @@ const SHEETS = {
       { c: 'AI', label: 'Customer balance', type: 'auto', money: true },
       { c: 'AJ', label: 'Payment status', type: 'auto', status: true },
       { c: 'AK', label: 'Booking type', type: 'auto' },
+      { c: 'AL', label: 'Sales executive', type: 'list', list: 'executives' },
     ],
-    list: ['A', 'B', 'C', 'E', 'I', 'Q', 'AI', 'AJ'],
+    list: ['A', 'B', 'C', 'E', 'AL', 'I', 'Q', 'AI', 'AJ'],
   },
   service: {
     name: 'Service', title: 'Service', icon: 'wrench', last: 'G', key: 'B',
@@ -161,7 +163,7 @@ const SHEETS = {
 // Masters tab: column -> list name
 const MASTERS = {
   A: 'models', B: 'variants', C: 'colours', D: 'financiers', E: 'expenseCats', F: 'modes',
-  G: 'serviceTypes', I: 'accounts', J: 'opening', K: 'bankTypes',
+  G: 'serviceTypes', I: 'accounts', J: 'opening', K: 'bankTypes', L: 'executives',
 };
 
 // What the Masters page can edit. max = rows the sheet's own formulas and dashboard cover.
@@ -171,6 +173,7 @@ const MASTER_LISTS = [
   { key: 'models', label: 'Models', col: 'A', max: 20, hint: 'Vehicle models. Used in stock, bookings and sales.' },
   { key: 'variants', label: 'Variants', col: 'B', max: 148, hint: 'Variants for any model.' },
   { key: 'colours', label: 'Colours', col: 'C', max: 148, hint: 'Colours for any model.' },
+  { key: 'executives', label: 'Sales executives', col: 'L', max: 148, hint: 'Names of the sales executives. Picked on every booking and sale, and shown executive-wise on the Dashboard.' },
   { key: 'accounts', label: 'Cash and bank accounts', col: 'I', opening: 'J', max: 12, fixed: ['Cash'], hint: 'Where money is received or paid from, with the opening balance of each.' },
   { key: 'financiers', label: 'Financiers', col: 'D', max: 16, hint: 'Banks and finance companies for HP sales.' },
   { key: 'expenseCats', label: 'Expense categories', col: 'E', max: 13, hint: 'Categories for the Expenses tab.' },
