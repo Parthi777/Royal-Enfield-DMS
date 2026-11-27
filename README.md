@@ -60,7 +60,7 @@ Users and roles are saved in `accounts.json` in the app's data folder.
 
 ## Expenses
 
-Expenses are money going out only: date, particulars, category, **Paid from** (Cash or a bank), amount, bill / UTR no, remarks. Money coming into cash from the office goes in **Bank Entries** (Account = Cash, Type = Cash from Office).
+Expenses are money going out only: date, particulars, category, **Paid from** (Cash or a bank), amount, bill / UTR no, remarks. Money coming into cash from the office goes in **Other Bank Entries** (Account = Cash, Type = Cash from Office).
 
 ## Payment reference (UTR)
 
