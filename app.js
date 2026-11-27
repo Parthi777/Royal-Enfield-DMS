@@ -594,8 +594,10 @@
     const fl = FILTERS[key];
     const f = fl.find((x) => x[0] === S.filter[key]) || fl[0];
     const qv = (S.q[key] || '').toLowerCase();
+    // newest date first; entries of the same date in the order they were entered (latest on top)
+    const dc = (sh.cols.find((c) => c.type === 'date') || {}).c;
     const rows = res.rows.filter(f[2]).filter((r) => !qv || Object.values(r).some((v) => String(v).toLowerCase().includes(qv)))
-      .sort((a, b) => b._row - a._row);
+      .sort((a, b) => (dc && a[dc] !== b[dc] ? (String(a[dc] || '') < String(b[dc] || '') ? 1 : -1) : b._row - a._row));
     const pend = new Set(res.pending), appr = new Map(res.approved.map((a) => [a.row, a.minutes]));
     const phoneCol = sh.cols.find((c) => c.type === 'phone');
     const cols = sh.list.filter((c) => !phoneCol || c !== phoneCol.c).map((c) => colOf(key, c));
