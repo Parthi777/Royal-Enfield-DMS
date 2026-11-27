@@ -143,6 +143,9 @@ a { color: var(--teal-d); text-decoration: none; } a:hover { text-decoration: un
 .btn.primary:hover { background: var(--teal-d); border-color: var(--teal-d); }
 .btn.navy { background: var(--navy); border-color: var(--navy); color: #fff; }
 .btn.danger { color: var(--red-d); }
+.btn.danger-ghost { color: var(--red-d); }
+.btn.danger-ghost:hover { background: var(--red-t, #fbeeee); }
+.modal .acts .btn.danger { background: var(--red-d); border-color: var(--red-d); color: #fff; }
 .btn:disabled { opacity: .55; cursor: not-allowed; }
 .btn.sm { padding: 5px 10px; font-size: 13px; }
 .field { display: flex; flex-direction: column; gap: 5px; min-width: 0; }

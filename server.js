@@ -4,7 +4,7 @@ const express = require('express');
 const crypto = require('crypto');
 const path = require('path');
 const { makeStore } = require('./store');
-const { DataService } = require('./data');
+const { DataService, DELETE_MARK } = require('./data');
 const { SHEETS } = require('./schema');
 const { Accounts, MODULES, LEVELS, rank } = require('./accounts');
 const { toExcel, toPdf } = require('./export');
@@ -160,7 +160,8 @@ app.get('/api/sheets/:key', auth(can(sheetKey, 'view')), wrap(async (req, res) =
   const mine = reqs.filter((r) => r.sheet === name && (req.user.approve || r.by === req.user.email));
   res.json({
     rows,
-    pending: mine.filter((r) => r.status === 'Pending').map((r) => r.row),
+    pending: mine.filter((r) => r.status === 'Pending' && !r.reason.startsWith(DELETE_MARK)).map((r) => r.row),
+    pendingDelete: mine.filter((r) => r.status === 'Pending' && r.reason.startsWith(DELETE_MARK)).map((r) => r.row),
     approved: mine.filter((r) => r.status === 'Approved' && r.until > now && r.by === req.user.email).map((r) => ({ row: r.row, minutes: Math.max(1, Math.round((r.until - now) * 1440)) })),
   });
 }));
@@ -175,6 +176,13 @@ app.post('/api/sheets/:key/:row/request', sameOrigin, auth(can(sheetKey, 'add'))
   res.json(await data.requestEdit(req.user, req.params.key, Number(req.params.row), req.body?.reason));
 }));
 
+app.post('/api/sheets/:key/:row/delete-request', sameOrigin, auth(can(sheetKey, 'add')), wrap(async (req, res) => {
+  res.json(await data.requestDelete(req.user, req.params.key, Number(req.params.row), req.body?.reason));
+}));
+// people who can change saved entries (Admin) delete directly; it is logged
+app.delete('/api/sheets/:key/:row', sameOrigin, auth(can(sheetKey, 'edit')), wrap(async (req, res) => {
+  res.json(await data.deleteRow(req.user, req.params.key, Number(req.params.row), req.body?.reason));
+}));
 app.get('/api/requests', auth(), wrap(async (req, res) => {
   const all = await data.requests();
   res.json({ requests: (req.user.approve ? all : all.filter((r) => r.by === req.user.email)).reverse() });
@@ -236,7 +244,7 @@ app.use((err, req, res, next) => {
   if (/protected cell|protected range/i.test(msg)) msg = 'The Google Sheet blocked this write: add the app\'s service account as an editor of the sheet protections (see README).';
   else if (status >= 500 && /PERMISSION_DENIED|caller does not have permission/i.test(msg)) msg = 'The app cannot open the Google Sheet. Share the sheet with the service account email as Editor.';
   else if (status >= 500) msg = 'Server error. Please try again.';
-  res.status(status).json({ error: msg });
+  res.status(status).json(err.dup ? { error: msg, dup: true } : { error: msg });
 });
 
 app.listen(PORT, () => {

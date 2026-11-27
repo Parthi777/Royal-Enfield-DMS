@@ -225,6 +225,85 @@ class DataService {
     });
   }
 
+  // a likely double entry: the same customer, payment or bill saved before. The user can still save after confirming.
+  duplicateOf(key, v, all) {
+    const digits = (x) => String(x ?? '').replace(/\D/g, '');
+    const same = (a, b) => String(a ?? '') === String(b ?? '');
+    const rs = (x) => '₹' + (Number(x) || 0).toLocaleString('en-IN');
+    const dt = (iso) => { const [y, m, dd] = String(iso).split('-'); return dd ? `${dd}-${m}-${y}` : String(iso); };
+    const veh = (x) => String(x ?? '').replace(/\s/g, '').toUpperCase();
+    let r;
+    switch (key) {
+      case 'bookings':
+        r = digits(v.C) && all.find((x) => digits(x.C) === digits(v.C) && !/deliver/i.test(String(x.M)));
+        return r ? `${r.B} (mobile ${r.C}) already has an open booking: ${r.D}, ${rs(r.G)} on ${dt(r.A)}. Is this really a second booking?` : null;
+      case 'sales':
+        r = digits(v.C) && all.find((x) => digits(x.C) === digits(v.C) && same(x.A, v.A));
+        return r ? `A sale for ${r.B} (mobile ${r.C}) is already saved on ${dt(r.A)}: engine ${r.D}. Is this really a second sale?` : null;
+      case 'payments':
+        r = all.find((x) => same(x.B, v.B) && same(x.A, v.A) && Number(x.D) === Number(v.D) && same(x.E, v.E));
+        return r ? `A payment of ${rs(r.D)} into ${r.E} on ${dt(r.A)} is already saved for engine ${r.B}. Is this really another payment?` : null;
+      case 'service':
+        r = veh(v.C) && all.find((x) => veh(x.C) === veh(v.C) && same(x.A, v.A));
+        return r ? `A service bill for ${r.C} on ${dt(r.A)} is already saved (${r.B}, ${rs(r.E)}). Is this really a second bill?` : null;
+      case 'expenses':
+        r = all.find((x) => same(x.A, v.A) && Number(x.E) === Number(v.E) && same(x.C, v.C) && same(x.D, v.D));
+        return r ? `An expense of ${rs(r.E)} for ${r.C} from ${r.D} on ${dt(r.A)} is already saved ("${r.B}"). Is this really another one?` : null;
+      case 'bank':
+        r = all.find((x) => same(x.A, v.A) && same(x.B, v.B) && same(x.D, v.D) && Number(x.E || 0) === Number(v.E || 0) && Number(x.F || 0) === Number(v.F || 0) && same(x.G, v.G));
+        return r ? `The same entry is already saved on ${dt(r.A)}: ${r.D}, ${rs(Number(r.E) || Number(r.F))}${r.G ? ` between ${r.G} and ${r.B}` : ` in ${r.B}`}. Is this really another one?` : null;
+      default: return null;
+    }
+  }
+
+  // why an entry can't be deleted yet (other entries depend on it), or null
+  async deleteBlocker(key, rec) {
+    if (key === 'stock') {
+      const [bookings, sales] = await Promise.all([this.rows('bookings'), this.rows('sales')]);
+      if (sales.some((r) => String(r.D) === String(rec.E))) return 'This vehicle is sold. Delete the sale first.';
+      if (bookings.some((r) => String(r.J) === String(rec.E))) return 'This vehicle is allotted to a booking. Remove it from the booking first.';
+    }
+    if (key === 'bookings' && /deliver/i.test(String(rec.M))) return 'This booking is delivered. Delete the sale first.';
+    if (key === 'sales') {
+      const n = (await this.rows('payments')).filter((p) => String(p.B) === String(rec.D)).length;
+      if (n) return `This sale has ${n} customer ${n === 1 ? 'payment' : 'payments'}. Delete ${n === 1 ? 'it' : 'them'} first: open each payment from the sale.`;
+    }
+    return null;
+  }
+
+  async requestDelete(user, key, row, reason) {
+    const sh = SHEETS[key];
+    if (!sh) throw httpError(404, 'Unknown sheet');
+    reason = String(reason || '').trim();
+    if (!reason) throw httpError(400, 'Please write why this entry should be deleted');
+    const rec = (await this.rows(key)).find((r) => r._row === row);
+    if (!rec) throw httpError(404, 'Row not found');
+    const block = await this.deleteBlocker(key, rec);
+    if (block) throw httpError(400, block);
+    const open = (await this.requests({ fresh: true })).find((x) => x.status === 'Pending' && x.sheet === sh.name && x.row === row && x.reason.startsWith(DELETE_MARK));
+    if (open) throw httpError(400, 'A delete request for this entry is already waiting for the Admin.');
+    return this.requestEdit(user, key, row, `${DELETE_MARK} ${reason}`);
+  }
+
+  // clear the typed cells of a row (formulas stay); the old values go to the Edit Log
+  async deleteRow(user, key, row, reason, requestedBy = '') {
+    const sh = SHEETS[key];
+    if (!sh) throw httpError(404, 'Unknown sheet');
+    reason = String(reason || '').replace(DELETE_MARK, '').trim();
+    if (!reason) throw httpError(400, 'Please write why this entry is deleted');
+    return this.withLock(sh.name, async () => {
+      const rec = (await this.rows(key, { fresh: true })).find((r) => r._row === row);
+      if (!rec) throw httpError(404, 'This entry is already deleted or was changed. Reload and check.');
+      const block = await this.deleteBlocker(key, rec);
+      if (block) throw httpError(400, block);
+      const ins = inputCols(sh);
+      await this.write(cellWrites(sh, row, Object.fromEntries(ins.map((c) => [c.c, '']))));
+      const was = ins.filter((c) => rec[c.c] !== '').map((c) => `${c.label}: ${rec[c.c]}`).join(' · ');
+      await this.log(user.email, sh.name, `Row ${row} (deleted)`, was, `Deleted${requestedBy ? ' at the request of ' + requestedBy : ''}: ${reason}`);
+      return { deleted: row };
+    });
+  }
+
   async decide(user, id, status) {
     if (!['Approved', 'Rejected'].includes(status)) throw httpError(400, 'Bad status');
     const req = (await this.requests({ fresh: true })).find((x) => x.id === id);
@@ -232,6 +311,15 @@ class DataService {
     // a pending request can be approved or rejected; an approval can be withdrawn (Rejected); nothing else reopens
     const withdraw = req.status === 'Approved' && status === 'Rejected';
     if (req.status !== 'Pending' && !withdraw) throw httpError(400, `This request was already ${req.status.toLowerCase()}${req.decidedBy ? ' by ' + req.decidedBy : ''}.`);
+    const isDelete = req.reason.startsWith(DELETE_MARK);
+    if (isDelete && status === 'Approved') {
+      if (withdraw) throw httpError(400, 'This entry is already deleted.');
+      const key = Object.keys(SHEETS).find((k) => SHEETS[k].name === req.sheet);
+      await this.deleteRow(user, key, req.row, req.reason, req.by);   // throws, leaving the request pending, if it can't be deleted
+      await this.write([{ range: `'Edit Requests'!G${id}:I${id}`, values: [['Approved', user.email, '']] }]);
+      return { ok: true, deleted: true };
+    }
+    if (isDelete && withdraw) throw httpError(400, 'This entry is already deleted.');
     const until = status === 'Approved' ? istStamp(APPROVAL_MINUTES) : '';
     await this.write([{ range: `'Edit Requests'!G${id}:I${id}`, values: [[status, user.email, until]] }]);
     await this.log(user.email, req.sheet, `Row ${req.row}`, `Edit ${status.toLowerCase()} for ${req.by}: ${req.reason}`, '');
@@ -267,6 +355,10 @@ class DataService {
     return this.withLock(sh.name, async () => {
       const all = await this.rows(key, { fresh: true });
       await this.checkRules(key, vals, all, null, ctx);
+      if (!body._dupOk) {
+        const dup = this.duplicateOf(key, vals, all);
+        if (dup) { const e = httpError(409, dup); e.dup = true; throw e; }
+      }
       const used = new Set(all.map((r) => r._row));
       let row = FIRST_ROW;
       while (used.has(row) && row <= LAST_ROW) row++;
@@ -566,10 +658,12 @@ function safeText(v) {
   return /^[=+\-@]/.test(s) ? "'" + s : s;
 }
 
+const DELETE_MARK = '[Delete]';
+
 function httpError(status, message) {
   const e = new Error(message);
   e.status = status;
   return e;
 }
 
-module.exports = { DataService, httpError, todayIst, colLetter };
+module.exports = { DataService, httpError, todayIst, colLetter, DELETE_MARK };

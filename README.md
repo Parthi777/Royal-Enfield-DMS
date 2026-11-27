@@ -102,6 +102,12 @@ Roles without Bank Ledger access see the sales and bookings figures only.
 
 A booking with an engine number marks that vehicle **Allotted** in Vehicle Stock; a sale marks it **Sold** and the booking **Delivered**. The sheet's old Check columns were removed: the app refuses those entries instead (see below).
 
+## Double entries and deleting
+
+- **Warning before saving:** a new entry that matches one already saved asks first ("Possible double entry"), showing the earlier one. Checked: a booking for a mobile number with an open booking; a sale for the same mobile on the same day; the same payment (engine, date, amount, account); a service bill for the same vehicle number on the same day; the same expense, bank or contra entry on the same day. Press OK to save anyway. Selling the same engine twice is always refused.
+- **Deleting:** staff press **Request delete** on a saved entry and give a reason; the Admin presses **Approve delete** in Edit Requests and the entry is removed (its typed cells are cleared; formulas stay). The Admin can also use **Delete entry** directly. Every delete goes to the Edit Log with the old values and the reason.
+- **Order:** a sale's payments must be deleted before the sale; a delivered booking needs its sale deleted first; a vehicle that is allotted or sold can't be deleted from stock.
+
 ## Checks on entries
 
 - **Dates:** impossible dates such as 31 Feb are refused.

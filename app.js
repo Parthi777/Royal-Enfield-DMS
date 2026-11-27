@@ -39,8 +39,18 @@
     });
     let out = {};
     try { out = await res.json(); } catch { /* empty */ }
-    if (!res.ok) { const e = new Error(out.error || 'Request failed'); e.status = res.status; e.mustChange = !!out.mustChange; throw e; }
+    if (!res.ok) { const e = new Error(out.error || 'Request failed'); e.status = res.status; e.mustChange = !!out.mustChange; e.dup = !!out.dup; throw e; }
     return out;
+  }
+
+  // save a new entry; a likely double entry asks before saving
+  async function postNew(key, body) {
+    try { return await api('POST', `/api/sheets/${key}`, body); }
+    catch (e) {
+      if (!e.dup) throw e;
+      if (!confirm(`Possible double entry\n\n${e.message}\n\nPress OK to save it anyway, or Cancel to check first.`)) { const c = new Error('Not saved: check for a double entry first.'); c.cancelled = true; throw c; }
+      return api('POST', `/api/sheets/${key}`, { ...body, _dupOk: '1' });
+    }
   }
 
   // pill colour from status text
@@ -449,7 +459,7 @@
       const text = v.C.trim() || (type === 'Cash Deposit' ? `Cash deposited into ${v.to}` : type === 'Cash Withdrawal' ? `Cash withdrawn from ${v.from}` : `Transfer from ${v.from} to ${v.to}`);
       const btn = d.querySelector('#cs'); btn.disabled = true;
       try {
-        await api('POST', '/api/sheets/bank', { A: v.A, B: v.to, C: text, D: type, E: String(amt), G: v.from });
+        await postNew('bank', { A: v.A, B: v.to, C: text, D: type, E: String(amt), G: v.from });
         closeDrawer();
         toast(`Saved: ${inr(amt, false)} from ${v.from} to ${v.to}`);
         if (location.hash === '#/contra') pageContra();
@@ -718,6 +728,7 @@
     const res = S.data[key] || { pending: [], approved: [] };
     const approved = !isNew && res.approved.find((a) => a.row === rec._row);
     const pending = !isNew && res.pending.includes(rec._row);
+    const pendingDel = !isNew && (res.pendingDelete || []).includes(rec._row);
     const form = {};
     sh.cols.forEach((c) => (form[c.c] = isNew ? '' : rec[c.c]));
     if (isNew) sh.cols.forEach((c) => { if (c.type === 'date' && c.req) form[c.c] = todayIso(); });
@@ -759,7 +770,8 @@
     };
 
     let notice = '';
-    if (!isNew && approved) notice = `<div class="notice ok">${ic('unlock')}<div><b>Edit approved.</b> This entry is open for you for about ${approved.minutes} more minutes.</div></div>`;
+    if (pendingDel) notice = `<div class="notice warn">${ic('clock')}<div><b>Delete request sent.</b> Waiting for the Admin. The entry stays until it is approved.</div></div>`;
+    else if (!isNew && approved) notice = `<div class="notice ok">${ic('unlock')}<div><b>Edit approved.</b> This entry is open for you for about ${approved.minutes} more minutes.</div></div>`;
     else if (!isNew && pending) notice = `<div class="notice warn">${ic('clock')}<div><b>Edit request sent.</b> Waiting for the Admin to approve it.</div></div>`;
     else if (!isNew && lockedAny && canDo(key, 'add')) notice = `<div class="notice info">${ic('lock')}<div>Saved values are locked. You can fill empty fields. To change a saved value, send an edit request to the Admin.</div></div>`;
     else if (!isNew && canDo(key, 'edit')) notice = `<div class="notice info">${ic('info')}<div>You can change saved values. Every change is written to the Edit Log with your name.</div></div>`;
@@ -774,7 +786,9 @@
         ${groups.map((g) => { const inner = g.cols.map((c) => fieldHtml(colOf(key, c))).join(''); return (inner ? `<div class="fgroup"${g.hpOnly ? ' data-hp="1"' : ''}><h4>${esc(g.title)}</h4><div class="fgrid">${inner}</div></div>` : '') + (key === 'sales' && g.title === 'Vehicle cost' ? '<div class="fgroup" id="paygrp"></div>' : ''); }).join('')}
       </form>
       <div class="drawer-f">
-        ${!isNew && lockedAny && canDo(key, 'add') && !approved && !pending ? `<button class="btn" id="reqedit">${ic('shield')}Request edit</button>` : ''}
+        ${!isNew && lockedAny && canDo(key, 'add') && !approved && !pending && !pendingDel ? `<button class="btn" id="reqedit">${ic('shield')}Request edit</button>` : ''}
+        ${!isNew && canDo(key, 'edit') ? `<button class="btn danger-ghost" id="delrow">${ic('x')}Delete entry</button>`
+          : !isNew && canDo(key, 'add') && !pendingDel ? `<button class="btn danger-ghost" id="reqdel">${ic('x')}Request delete</button>` : ''}
         <div style="flex:1"></div>
         <button class="btn" data-close>${canDo(key, 'add') ? 'Cancel' : 'Close'}</button>
         ${canDo(key, 'add') && (isNew || key === 'sales' || sh.cols.some(canEdit)) ? `<button class="btn primary" id="save">${ic('check')}${isNew ? 'Save entry' : 'Save changes'}</button>` : ''}
@@ -915,11 +929,12 @@
       if (!isNew && !Object.keys(body).length && !payList.length) { closeDrawer(); return; }
       save.disabled = true;
       try {
-        if (isNew || Object.keys(body).length) await api(isNew ? 'POST' : 'PUT', isNew ? `/api/sheets/${key}` : `/api/sheets/${key}/${rec._row}`, body);
+        if (isNew) await postNew(key, body);
+        else if (Object.keys(body).length) await api('PUT', `/api/sheets/${key}/${rec._row}`, body);
         let paid = 0, payErr = '';
         const engine = String(form.D || rec?.D || '');
         for (const p of payList) {
-          try { await api('POST', '/api/sheets/payments', { A: p.A, B: engine, D: p.D, E: p.E, F: p.F, G: p.G }); paid++; }
+          try { await postNew('payments', { A: p.A, B: engine, D: p.D, E: p.E, F: p.F, G: p.G }); paid++; }
           catch (e) { payErr = e.message; break; }
         }
         if (payErr) toast(`${isNew ? 'Sale saved' : 'Saved'}, but payment ${paid + 1} wasn't: ${payErr}`, true);
@@ -931,6 +946,41 @@
     };
     const rq = d.querySelector('#reqedit');
     if (rq) rq.onclick = () => askReason(key, rec);
+    const rd = d.querySelector('#reqdel'); if (rd) rd.onclick = () => askDelete(key, rec, false);
+    const dr = d.querySelector('#delrow'); if (dr) dr.onclick = () => askDelete(key, rec, true);
+  }
+
+  // delete a wrong or double entry: staff ask, the Admin approves (or the Admin deletes directly)
+  function askDelete(key, rec, direct) {
+    const sh = S.schema[key];
+    const what = sh.cols.filter((c) => c.type !== 'auto' && rec[c.c] !== '').slice(0, 5)
+      .map((c) => c.type === 'money' ? inr(rec[c.c], false) : c.type === 'date' ? fdate(rec[c.c]) : rec[c.c]).join(' · ');
+    const m = document.createElement('div');
+    m.className = 'modal';
+    m.innerHTML = `<div class="scrim" style="position:absolute"></div><div class="box" style="position:relative">
+      <h3>${direct ? 'Delete entry' : 'Request delete'}</h3>
+      <p>${esc(sh.title)} · row ${rec._row}<br><b>${esc(what)}</b></p>
+      <p class="muted">${direct ? 'The entry is removed from the sheet and the totals. Its old values are kept in the Edit Log.' : 'The Admin gets your request. The entry is removed only when they approve it.'}</p>
+      <div class="field"><label>Why should it be deleted?</label><textarea id="why" rows="3" placeholder="e.g. Double entry: the same payment was saved twice"></textarea></div>
+      <div class="acts"><button class="btn" id="c">Cancel</button><button class="btn ${direct ? 'danger' : 'primary'}" id="s">${direct ? 'Delete entry' : 'Send request'}</button></div></div>`;
+    document.body.appendChild(m);
+    const close = () => { m.remove(); m._release?.(); };
+    asDialog(m, m.querySelector('.box'), close);
+    m.querySelector('#why').focus();
+    m.querySelector('#c').onclick = () => close();
+    m.querySelector('.scrim').onclick = () => close();
+    m.querySelector('#s').onclick = async () => {
+      const reason = m.querySelector('#why').value.trim();
+      if (!reason) return toast('Please write the reason', true);
+      try {
+        if (direct) await api('DELETE', `/api/sheets/${key}/${rec._row}`, { reason });
+        else await api('POST', `/api/sheets/${key}/${rec._row}/delete-request`, { reason });
+        close(); closeDrawer();
+        toast(direct ? 'Entry deleted' : 'Delete request sent to the Admin');
+        await refreshCore();
+        if (location.hash === '#/contra') pageContra(); else pageSheet(key === 'payments' ? 'sales' : key);
+      } catch (e) { toast(e.message, true); }
+    };
   }
 
   function askReason(key, rec) {
@@ -999,21 +1049,22 @@
     loading('Edit Requests');
     const { requests } = await api('GET', '/api/requests');
     const pend = requests.filter((r) => r.status === 'Pending');
+    const isDel = (r) => String(r.reason).startsWith('[Delete]');
     S.pendingCount = S.user.approve ? pend.length : 0;
     const row = (r) => `<tr>
       <td class="date">${esc(serialToText(r.at))}</td><td>${esc(r.by)}</td>
-      <td><a href="#/s/${sheetKeyByName(r.sheet) || ''}">${esc(r.sheet)}</a> · row ${r.row}<div class="muted">${esc(r.entry)}</div></td>
-      <td>${esc(r.reason)}</td><td>${pill(r.status)}${r.decidedBy ? `<div class="muted" style="font-size:12px">${esc(r.decidedBy)}</div>` : ''}</td>
-      <td class="num">${S.user.approve && r.status === 'Pending' ? `<button class="btn sm primary" data-ok="${r.id}">Approve</button> <button class="btn sm danger" data-no="${r.id}">Reject</button>` : ''}</td></tr>`;
+      <td class="wrap"><a href="#/s/${sheetKeyByName(r.sheet) || ''}">${esc(r.sheet)}</a> · row ${r.row}<div class="muted">${esc(String(r.entry).replace(/\b(\d{4})-(\d{2})-(\d{2})\b/g, (_, y, m, d) => `${d}-${m}-${y}`))}</div></td>
+      <td class="wrap">${isDel(r) ? `<span class="pill red">Delete</span> ${esc(r.reason.slice(8).trim())}` : esc(r.reason)}</td><td>${pill(isDel(r) && r.status === 'Approved' ? 'Deleted' : r.status)}${r.decidedBy ? `<div class="muted" style="font-size:12px">${esc(r.decidedBy)}</div>` : ''}</td>
+      <td class="num">${S.user.approve && r.status === 'Pending' ? `<button class="btn sm ${isDel(r) ? 'danger' : 'primary'}" data-ok="${r.id}" data-del="${isDel(r) ? 1 : ''}">${isDel(r) ? 'Approve delete' : 'Approve'}</button> <button class="btn sm danger" data-no="${r.id}">Reject</button>` : ''}</td></tr>`;
     const table = (list, empty) => list.length ? `<div class="tbl-wrap"><table><thead><tr><th>When</th><th>Requested by</th><th>Entry</th><th>Reason</th><th>Status</th><th></th></tr></thead><tbody>${list.map(row).join('')}</tbody></table></div>` : `<div class="empty">${empty}</div>`;
-    shell('Edit Requests', S.user.approve ? 'Approve to open that entry for 30 minutes, only for the person who asked' : 'Your requests to change saved entries', exportBtn(), `
+    shell('Edit Requests', S.user.approve ? 'Approve an edit to open that entry for 30 minutes for the person who asked. Approve a delete to remove the entry.' : 'Your requests to change saved entries', exportBtn(), `
       ${S.user.approve ? `<div class="panel" style="margin-bottom:16px"><div class="panel-h"><h2>Waiting for you</h2><small>${pend.length}</small></div>${table(pend, 'No pending requests.')}</div>` : ''}
-      <div class="panel"><div class="panel-h"><h2>${S.user.approve ? 'History' : 'My requests'}</h2></div>${table(S.user.approve ? requests.filter((r) => r.status !== 'Pending') : requests, 'No requests yet. Open a saved entry and use "Request edit".')}</div>`);
+      <div class="panel"><div class="panel-h"><h2>${S.user.approve ? 'History' : 'My requests'}</h2></div>${table(S.user.approve ? requests.filter((r) => r.status !== 'Pending') : requests, 'No requests yet. Open a saved entry and use "Request edit" or "Request delete".')}</div>`);
     const decide = async (id, status) => {
-      try { await api('POST', `/api/requests/${id}`, { status }); toast(status === 'Approved' ? 'Approved: entry open for 30 minutes' : 'Request rejected'); pageApprovals(); }
+      try { const out = await api('POST', `/api/requests/${id}`, { status }); toast(out.deleted ? 'Approved: entry deleted' : status === 'Approved' ? 'Approved: entry open for 30 minutes' : 'Request rejected'); pageApprovals(); }
       catch (e) { toast(e.message, true); }
     };
-    document.querySelectorAll('[data-ok]').forEach((b) => b.onclick = () => decide(Number(b.dataset.ok), 'Approved'));
+    document.querySelectorAll('[data-ok]').forEach((b) => b.onclick = () => { if (b.dataset.del && !confirm('Delete this entry from the sheet? Its old values are kept in the Edit Log.')) return; decide(Number(b.dataset.ok), 'Approved'); });
     wireExport(() => ({ title: 'Edit Requests', subtitle: `${requests.length} requests`, sections: [{ heading: 'Edit requests',
       columns: ['When', 'Requested by', 'Sheet', 'Row', 'Entry', 'Reason', 'Status', 'Decided by'].map((l) => ({ label: l })),
       rows: requests.map((r) => [serialToText(r.at), r.by, r.sheet, r.row, r.entry, r.reason, r.status, r.decidedBy]) }] }));
