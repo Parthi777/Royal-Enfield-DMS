@@ -1,0 +1,409 @@
+{
+ "name": "2026-11-27-stock-and-bookings",
+ "masters": {
+  "models": [
+   "Bullet 350",
+   "Classic 350",
+   "Himalayan 450",
+   "Hunter 350",
+   "Meteor 350",
+   "Scram 440"
+  ],
+  "colours": [
+   "Battalion Black",
+   "Black Gold",
+   "Commando Sand",
+   "Emerald Green",
+   "Factory Black",
+   "Fireball Orange",
+   "Graphite Grey",
+   "Gun Grey",
+   "Mana Black",
+   "Medallion Bronze",
+   "Rio White",
+   "Standard Black",
+   "Stealth Black",
+   "Stellar Marine Blue",
+   "Supernova Black",
+   "Tokyo Black",
+   "Trail Green"
+  ],
+  "executives": [
+   "Ebrahim",
+   "Arun"
+  ]
+ },
+ "stock": [
+  {
+   "A": "2026-11-19",
+   "B": "Meteor 350",
+   "C": "",
+   "D": "Supernova Black",
+   "E": "J3A5FLT2057522",
+   "F": "ME3J3A5FLT2008667",
+   "G": 210030.74
+  },
+  {
+   "A": "2026-11-19",
+   "B": "Classic 350",
+   "C": "",
+   "D": "Medallion Bronze",
+   "E": "J3A5FLT2026301",
+   "F": "ME3J3C5FLT2029470",
+   "G": 188715.26
+  },
+  {
+   "A": "2026-11-19",
+   "B": "Classic 350",
+   "C": "",
+   "D": "Medallion Bronze",
+   "E": "J3A5FLT2026272",
+   "F": "ME3J3C5FLT2029471",
+   "G": 188715.26
+  },
+  {
+   "A": "2026-11-19",
+   "B": "Classic 350",
+   "C": "",
+   "D": "Gun Grey",
+   "E": "J3A5FLT2056106",
+   "F": "ME3J3C5FLT2028502",
+   "G": 208279.08
+  },
+  {
+   "A": "2026-11-19",
+   "B": "Classic 350",
+   "C": "",
+   "D": "Gun Grey",
+   "E": "J3A5FLT2056110",
+   "F": "ME3J3C5FLT2028505",
+   "G": 208279.08
+  },
+  {
+   "A": "2026-11-19",
+   "B": "Classic 350",
+   "C": "",
+   "D": "Gun Grey",
+   "E": "J3A5FLT2056744",
+   "F": "ME3J3C5FLT2028848",
+   "G": 208279.08
+  },
+  {
+   "A": "2026-11-19",
+   "B": "Classic 350",
+   "C": "",
+   "D": "Gun Grey",
+   "E": "J3A5FLT2057608",
+   "F": "ME3J3C5FLT2028858",
+   "G": 208279.08
+  },
+  {
+   "A": "2026-11-19",
+   "B": "Classic 350",
+   "C": "",
+   "D": "Gun Grey",
+   "E": "J3A5FLT1024801",
+   "F": "ME3J3C5FLT2029473",
+   "G": 208279.08
+  },
+  {
+   "A": "2026-11-19",
+   "B": "Classic 350",
+   "C": "",
+   "D": "Stealth Black",
+   "E": "J3A5FLT2058129",
+   "F": "ME3J3C5FLT2029505",
+   "G": 208279.08
+  },
+  {
+   "A": "2026-11-19",
+   "B": "Classic 350",
+   "C": "",
+   "D": "Stealth Black",
+   "E": "J3A5FLT2057650",
+   "F": "ME3J3C5FLT2029509",
+   "G": 208279.08
+  },
+  {
+   "A": "2026-11-19",
+   "B": "Classic 350",
+   "C": "",
+   "D": "Stealth Black",
+   "E": "J3A5FLT2058754",
+   "F": "ME3J3C5FLT2029512",
+   "G": 208279.08
+  },
+  {
+   "A": "2026-11-19",
+   "B": "Classic 350",
+   "C": "",
+   "D": "Stealth Black",
+   "E": "J3A5FLT2058362",
+   "F": "ME3J3C5FLT2029529",
+   "G": 208279.08
+  },
+  {
+   "A": "2026-11-19",
+   "B": "Classic 350",
+   "C": "",
+   "D": "Stealth Black",
+   "E": "J3A5FLT1024045",
+   "F": "ME3J3C5FLT2029577",
+   "G": 208279.08
+  },
+  {
+   "A": "2026-11-19",
+   "B": "Meteor 350",
+   "C": "",
+   "D": "Fireball Orange",
+   "E": "J3A5FLT2055542",
+   "F": "ME3J3A5FLT2008274",
+   "G": 189569.44
+  },
+  {
+   "A": "2026-11-19",
+   "B": "Meteor 350",
+   "C": "",
+   "D": "Stellar Marine Blue",
+   "E": "J3A5FLT2038062",
+   "F": "ME3J3A5FLT2008711",
+   "G": 197770.44
+  },
+  {
+   "A": "2026-11-19",
+   "B": "Bullet 350",
+   "C": "",
+   "D": "Black Gold",
+   "E": "J3A5FLT2057292",
+   "F": "ME3J3B5FLT2019704",
+   "G": 198487.88
+  },
+  {
+   "A": "2026-11-19",
+   "B": "Classic 350",
+   "C": "",
+   "D": "Commando Sand",
+   "E": "J3A5FLT2026153",
+   "F": "ME3J3C5FLT2027739",
+   "G": 199892.16
+  },
+  {
+   "A": "2026-11-19",
+   "B": "Classic 350",
+   "C": "",
+   "D": "Commando Sand",
+   "E": "J3A5FLT2055788",
+   "F": "ME3J3C5FLT2027859",
+   "G": 199892.16
+  },
+  {
+   "A": "2026-11-19",
+   "B": "Classic 350",
+   "C": "",
+   "D": "Commando Sand",
+   "E": "J3A5FLT2057116",
+   "F": "ME3J3C5FLT2028834",
+   "G": 199892.16
+  },
+  {
+   "A": "2026-11-19",
+   "B": "Bullet 350",
+   "C": "",
+   "D": "Standard Black",
+   "E": "J3A5FLT2054448",
+   "F": "ME3J3B5FLT2019149",
+   "G": 181393.0
+  },
+  {
+   "A": "2026-11-19",
+   "B": "Himalayan 450",
+   "C": "",
+   "D": "Mana Black",
+   "E": "K5W6FLT1001168",
+   "F": "ME3K5A6FLT1001357",
+   "G": 316587.0
+  }
+ ],
+ "bookings": [
+  {
+   "A": "2026-10-29",
+   "B": "Govindarajan",
+   "C": "9344766374",
+   "D": "Classic 350",
+   "E": "",
+   "F": "Stealth Black",
+   "Z": "Ebrahim"
+  },
+  {
+   "A": "2026-11-06",
+   "B": "Akshay.N",
+   "C": "9843228741",
+   "D": "Classic 350",
+   "E": "",
+   "F": "Gun Grey",
+   "Z": "Arun"
+  },
+  {
+   "A": "2026-11-06",
+   "B": "Sathya boopathy",
+   "C": "9965017766",
+   "D": "Classic 350",
+   "E": "",
+   "F": "Gun Grey",
+   "Z": "Ebrahim"
+  },
+  {
+   "A": "2026-11-08",
+   "B": "Shanmugam",
+   "C": "8344534019",
+   "D": "Classic 350",
+   "E": "",
+   "F": "Stealth Black",
+   "Z": "Ebrahim"
+  },
+  {
+   "A": "2026-11-09",
+   "B": "Vignesh",
+   "C": "9791856590",
+   "D": "Hunter 350",
+   "E": "",
+   "F": "Graphite Grey",
+   "Z": "Ebrahim"
+  },
+  {
+   "A": "2026-11-10",
+   "B": "Surya",
+   "C": "6369343441",
+   "D": "Bullet 350",
+   "E": "",
+   "F": "Standard Black",
+   "Z": "Ebrahim"
+  },
+  {
+   "A": "2026-11-11",
+   "B": "Keerthivarman",
+   "C": "9600343259",
+   "D": "Meteor 350",
+   "E": "",
+   "F": "Stellar Marine Blue",
+   "Z": "Arun"
+  },
+  {
+   "A": "2026-11-11",
+   "B": "Methun R",
+   "C": "8675827579",
+   "D": "Classic 350",
+   "E": "",
+   "F": "Gun Grey",
+   "Z": "Ebrahim"
+  },
+  {
+   "A": "2026-11-13",
+   "B": "Kalaivanan",
+   "C": "8610941156",
+   "D": "Classic 350",
+   "E": "",
+   "F": "Stealth Black",
+   "Z": "Arun"
+  },
+  {
+   "A": "2026-11-13",
+   "B": "Mathan",
+   "C": "8637672515",
+   "D": "Classic 350",
+   "E": "",
+   "F": "Gun Grey",
+   "Z": "Arun"
+  },
+  {
+   "A": "2026-11-16",
+   "B": "Ram Kumar",
+   "C": "8681974009",
+   "D": "Classic 350",
+   "E": "",
+   "F": "Stealth Black",
+   "Z": "Arun"
+  },
+  {
+   "A": "2026-11-17",
+   "B": "Prabhu",
+   "C": "9865221818",
+   "D": "Classic 350",
+   "E": "",
+   "F": "Gun Grey",
+   "Z": "Arun"
+  },
+  {
+   "A": "2026-11-21",
+   "B": "Vijay",
+   "C": "8610539192",
+   "D": "Bullet 350",
+   "E": "",
+   "F": "Battalion Black",
+   "Z": "Arun"
+  },
+  {
+   "A": "2026-11-23",
+   "B": "Sowndhar",
+   "C": "8015999049",
+   "D": "Meteor 350",
+   "E": "",
+   "F": "Stellar Marine Blue",
+   "Z": "Arun"
+  },
+  {
+   "A": "2026-11-23",
+   "B": "Sowmiyan",
+   "C": "8248030021",
+   "D": "Scram 440",
+   "E": "",
+   "F": "Trail Green",
+   "Z": "Ebrahim"
+  },
+  {
+   "A": "2026-11-23",
+   "B": "Dinesh Kumar",
+   "C": "9342747366",
+   "D": "Hunter 350",
+   "E": "",
+   "F": "Rio White",
+   "Z": "Ebrahim"
+  },
+  {
+   "A": "2026-11-24",
+   "B": "Kavibharathi",
+   "C": "6374049994",
+   "D": "Classic 350",
+   "E": "",
+   "F": "Emerald Green",
+   "Z": "Ebrahim"
+  },
+  {
+   "A": "2026-11-25",
+   "B": "Raj Kumar",
+   "C": "9080332293",
+   "D": "Hunter 350",
+   "E": "",
+   "F": "Tokyo Black",
+   "Z": "Ebrahim"
+  },
+  {
+   "A": "2026-11-26",
+   "B": "Tharun Raj",
+   "C": "9787977796",
+   "D": "Classic 350",
+   "E": "",
+   "F": "Medallion Bronze",
+   "Z": "Ebrahim"
+  },
+  {
+   "A": "2026-11-27",
+   "B": "Gowtham",
+   "C": "6979979728",
+   "D": "Hunter 350",
+   "E": "",
+   "F": "Factory Black",
+   "Z": "Arun"
+  }
+ ]
+}

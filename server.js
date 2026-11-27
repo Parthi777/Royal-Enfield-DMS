@@ -247,7 +247,7 @@ app.use((err, req, res, next) => {
   res.status(status).json(err.dup ? { error: msg, dup: true } : { error: msg });
 });
 
-Promise.resolve(store.ready).then(() => app.listen(PORT, () => {
+Promise.resolve(store.ready).then(() => require('./import').runImports(data).catch((e) => console.error('IMPORT failed:', e.message))).then(() => app.listen(PORT, () => {
   console.log(`RE Showroom app on :${PORT}  ${kind === 'postgres' ? `(DATABASE: PostgreSQL, ${store.rowCount} rows, loaded from ${store.loadedFrom})` : demo ? `(NOT CONNECTED to the Google Sheet: entries saved in ${store.saveFile || 'memory only'}${store.loadedFrom === store.saveFile ? ', loaded from it' : ''})` : '(Google Sheet: ' + process.env.SHEET_ID + ', service account ' + store.email + ')'}`);
   console.log(`Accounts saved in ${accounts.file}${accounts.persistent ? '' : '  (WARNING: not on a volume, accounts are lost on redeploy)'}`);
   if (accounts.setupCode) console.log(`\n  FIRST-TIME SETUP CODE: ${accounts.setupCode}\n  Open the app and use this code to create the Admin account.\n`);
