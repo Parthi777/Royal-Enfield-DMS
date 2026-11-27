@@ -82,6 +82,10 @@ Money moved between your own accounts: cash taken to the bank (Cash deposit), ca
 
 It is saved as one Bank Entries row (Account = To, Credit / in = amount, Contra account = From). In the Day Book it shows as a Transfer on both accounts, and the Total leaves transfers out.
 
+## Other Bank Entries
+
+Only for money that is not a customer payment, an expense or a contra entry: bank charges, interest, cheque returns, other credits and debits, and cash given by the office (Account = Cash, Type = Cash from Office). There is no contra field: cash deposits, withdrawals and transfers are refused here and go in Contra Entry. Contra entries are kept in the same sheet tab (Bank Entries) but listed on the Contra Entry page.
+
 ## Bank Ledger
 
 The Bank Ledger page shows bank accounts only: a statement per account with opening, received, paid and closing. Cash is in the Day Book.

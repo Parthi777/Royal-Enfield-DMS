@@ -113,7 +113,7 @@ const SHEETS = {
     list: ['A', 'B', 'C', 'D', 'E', 'F'],
   },
   bank: {
-    name: 'Bank Entries', title: 'Bank Entries', icon: 'bank', last: 'G', key: 'C',
+    name: 'Bank Entries', title: 'Other Bank Entries', icon: 'bank', last: 'G', key: 'C',
     cols: [
       { c: 'A', label: 'Date', type: 'date', req: true },
       { c: 'B', label: 'Account', type: 'list', list: 'accounts', req: true },

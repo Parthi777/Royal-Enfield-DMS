@@ -388,6 +388,12 @@ class DataService {
     }
     // the same checks the sheet's Check column makes, enforced when the fields involved are saved
     const touch = (...cols) => !changed || cols.some((c) => c in changed);
+    // transfers between own accounts are made on the Contra Entry page, which fills the contra account
+    if (key === 'bank' && touch('D', 'G')) {
+      const CONTRA = ['Cash Deposit', 'Cash Withdrawal', 'Transfer'];
+      if (CONTRA.includes(v.D) && !v.G) throw httpError(400, 'Cash deposits, withdrawals and transfers go in Contra Entry');
+      if (v.G && !CONTRA.includes(v.D)) throw httpError(400, 'A contra account is only for cash deposits, withdrawals and transfers: use Contra Entry');
+    }
     if (key === 'expenses' && touch('E') && !(Number(v.E) > 0)) throw httpError(400, 'Enter the amount paid');
     if (key === 'bank' && touch('E', 'F') && !(Number(v.E) > 0) && !(Number(v.F) > 0)) throw httpError(400, 'Enter the amount in Credit / in or Debit / out');
     if (key === 'bookings' && touch('A', 'I') && v.I && v.A && String(v.I) < String(v.A)) throw httpError(400, 'Commitment date can\'t be before the booking date');

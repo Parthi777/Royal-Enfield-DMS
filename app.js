@@ -178,7 +178,7 @@
   const NAV = [
     ['', [['#/dashboard', 'Dashboard', 'dash', 'dashboard']]],
     ['Showroom', [['#/s/stock', 'Vehicle Stock', 'stock', 'stock'], ['#/s/bookings', 'Bookings', 'bookings', 'bookings'], ['#/s/sales', 'Vehicle Sales', 'sales', 'sales'], ['#/s/service', 'Service', 'service', 'service']]],
-    ['Accounts', [['#/s/expenses', 'Expenses', 'expenses', 'expenses'], ['#/s/bank', 'Bank Entries', 'bank', 'bank'], ['#/contra', 'Contra Entry', 'contra', 'bank'], ['#/daybook', 'Day Book', 'daybook', 'ledger'], ['#/ledger', 'Bank Ledger', 'ledger', 'ledger']]],
+    ['Accounts', [['#/s/expenses', 'Expenses', 'expenses', 'expenses'], ['#/contra', 'Contra Entry', 'contra', 'bank'], ['#/s/bank', 'Other Bank Entries', 'bank', 'bank'], ['#/daybook', 'Day Book', 'daybook', 'ledger'], ['#/ledger', 'Bank Ledger', 'ledger', 'ledger']]],
     ['Control', [['#/approvals', 'Edit Requests', 'approvals', '@approvals'], ['#/masters', 'Masters', 'masters', 'masters'], ['#/access', 'Users & Roles', 'roles', '@users']]],
   ];
   const navAllowed = (k) => k === '@users' ? !!S.user.manageUsers
@@ -390,7 +390,7 @@
       ${rows.length ? `<div class="tbl-wrap"><table><thead><tr><th>Date</th><th>Type</th><th>From</th><th>To</th><th class="hide-m">Particulars</th><th class="num">Amount</th></tr></thead><tbody>
         ${rows.map((x) => `<tr class="click" data-row="${x.r._row}"><td>${esc(fdate(x.r.A))}</td><td>${esc(contraKind(x.from, x.to))}</td><td>${esc(x.from)}</td><td>${esc(x.to)}</td><td class="hide-m wrap">${esc(x.r.C)}</td><td class="num strong">${inr(x.amt, false)}</td></tr>`).join('')}
       </tbody></table></div>` : `<div class="empty">No contra entries yet.${add ? ' Use “New contra entry” when cash goes to the bank, cash comes from the bank, or money moves between banks.' : ''}</div>`}</div>
-      <p class="hint" style="margin:10px 2px">Each contra entry is saved in Bank Entries. In the Day Book it shows as a Transfer on both accounts: the money leaves one account and reaches the other, so the total does not change.</p>`);
+      <p class="hint" style="margin:10px 2px">Each contra entry is saved in the sheet's Bank Entries tab. In the Day Book it shows as a Transfer on both accounts: the money leaves one account and reaches the other, so the total does not change.</p>`);
     const nb = document.getElementById('newc'); if (nb) nb.onclick = () => openContra();
     document.querySelectorAll('tr[data-row]').forEach((tr) => (tr.onclick = () => openRow('bank', Number(tr.dataset.row))));
   }
@@ -571,6 +571,7 @@
     if (!sh) return pageDashboard();
     loading(sh.title);
     const res = await api('GET', `/api/sheets/${key}`);
+    if (key === 'bank') res.rows = res.rows.filter((r) => !r.G);   // contra rows live on the Contra Entry page
     S.data[key] = res;
     if (key === 'sales') await loadSaleExtras();
     if (!S.filter[key]) S.filter[key] = FILTERS[key][0][0];
@@ -728,6 +729,8 @@
     const fieldHtml = (c) => {
       const v = form[c.c];
       const hp = (c.hpOnly ? ` data-hp="1"` : '') + (c.refOf ? ` data-ref="${c.refOf}"` : '');
+      const plainBank = key === 'bank' && (isNew || !rec.G);   // charges, interest, etc.: no contra side
+      if (plainBank && c.c === 'G') return '';
       if (c.type === 'auto') {
         if (isNew && key !== 'sales') return '';
         if (isNew) return `<div class="field"${hp}><label>${esc(c.label)}</label><div class="ro auto" data-auto="${c.c}">${cellHtml(c, v) || '<span class="muted">auto</span>'}</div></div>`;
@@ -741,7 +744,7 @@
       if (c.type === 'list' || c.type === 'engine' || c.type === 'sold') {
         const opts = c.type === 'engine' ? engineOptions(key, v, form)
           : c.type === 'sold' ? S.sold.slice().reverse().map((x) => ({ v: x.engine, t: `${x.engine} · ${x.customer}${x.model ? ' · ' + x.model : ''}` }))
-          : (S.lists[c.list] || []).map((x) => ({ v: x, t: x }));
+          : (S.lists[c.list] || []).filter((x) => !(plainBank && c.list === 'bankTypes' && ['Cash Deposit', 'Cash Withdrawal', 'Transfer'].includes(x))).map((x) => ({ v: x, t: x }));
         if (v !== '' && !opts.some((o) => String(o.v) === String(v))) opts.unshift({ v, t: String(v) });
         input = `<select name="${c.c}"><option value="">— select —</option>${opts.map((o) => `<option value="${esc(o.v)}" ${String(o.v) === String(v) ? 'selected' : ''}>${esc(o.t)}</option>`).join('')}</select>`;
       } else if (c.type === 'date') {
