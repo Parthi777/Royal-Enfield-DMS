@@ -94,7 +94,7 @@ The Bank Ledger page shows bank accounts only: a statement per account with open
 
 - **Today:** sales, bookings, service, collections; then cash opening and closing, bank opening and closing, bank deposits and expenses.
 - **This month:** the same figures for the month so far.
-- **Below:** the cash and bank account table, then charts (money in and out by day, follow-ups, vehicles sold, stock, expenses, sales mix).
+- **Below:** the cash and bank account table, then charts (money in and out by day, follow-ups, vehicles sold, stock, expenses, sales).
 
 Roles without Bank Ledger access see the sales and bookings figures only.
 
@@ -124,7 +124,7 @@ Every list has **Export → Excel / PDF**: stock, bookings, sales, sale payments
 
 ## Demo mode
 
-Without `GOOGLE_SERVICE_ACCOUNT_JSON` (or with `DEMO_MODE=true`), the app starts empty and keeps entries in memory only: they are lost when the app restarts. Sign-in, roles and reports all work, but nothing is saved to the sheet. A note in the side menu says so.
+Without `GOOGLE_SERVICE_ACCOUNT_JSON` (or with `DEMO_MODE=true`), the app starts empty and keeps entries in memory only: they are lost when the app restarts. Sign-in, roles and reports all work, but nothing is saved to the sheet.
 
 ## Connect your Google Sheet
 

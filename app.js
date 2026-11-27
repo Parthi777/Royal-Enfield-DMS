@@ -194,7 +194,6 @@
           <div class="side-brand"><img src="/brand/logo-160.png" alt="" width="64" height="64"><div><b>${esc(S.showroom)}</b><span>Royal Enfield dealer</span></div></div>
           <nav class="nav">${NAV.map(([sec, items]) => { const ok = items.filter((i) => navAllowed(i[3])); return ok.length ? (sec ? `<div class="sec">${sec}</div>` : '') + ok.map(([href, label, icon]) =>
             `<a href="${href}" class="${route.startsWith(href) ? 'on' : ''}">${ic(icon)}<span>${label}</span>${href === '#/approvals' && S.pendingCount ? `<span class="badge">${S.pendingCount}</span>` : ''}</a>`).join('') : ''; }).join('')}</nav>
-          ${S.demo ? '<div class="side-note">Not connected to the Google Sheet yet. Entries are kept only until the app restarts.</div>' : ''}
         </aside>
         <main class="main">
           <header class="topbar">
@@ -339,7 +338,7 @@
             ${d.expenses.length ? `<ul class="rows">${d.expenses.map((e) => `<li><div class="who"><b>${esc(e.category)}</b></div><div class="barline">${bar(e.paid, maxExp, 'navy')}</div><div class="amt" style="width:90px">${inr(e.paid, false)}</div></li>`).join('')}</ul>` : '<div class="empty-line">No expenses this month.</div>'}
           </div></div>`}
 
-          <div class="panel"><div class="panel-h"><h2>Sales mix</h2><small>${esc(monthName)}</small></div><div class="panel-b">
+          <div class="panel"><div class="panel-h"><h2>Sales</h2><small>${esc(monthName)}</small></div><div class="panel-b">
             <ul class="rows">${d.mix.map((m) => `<li><div class="who"><b>${esc(m.mode === 'HP' ? 'Finance (HP)' : m.mode)}</b></div><div class="amt"><b>${m.count}</b> <span class="muted">${m.count === 1 ? 'vehicle' : 'vehicles'}</span></div></li>`).join('')}
             ${d.financiers.map((f) => `<li><div class="who"><small>${esc(f.name)}</small></div><div class="amt"><small style="display:inline">${f.count} · DD ${inr(f.dd, false)}</small></div></li>`).join('')}</ul>
           </div></div>
