@@ -76,6 +76,12 @@ Cash payments don't need one. The UTR also shows in the bank ledger and day book
 
 **Day Book** shows one day at a time: every receipt (money in) and payment (money out) with its account, then cash and bank accounts with opening balance, received, paid and closing balance, and the same for each account. Use the arrows or the date box to move between days. Exports to Excel and PDF.
 
+## Contra Entry
+
+Money moved between your own accounts: cash taken to the bank (Cash deposit), cash brought from the bank (Cash withdrawal), or bank to bank. Open **Contra Entry → New contra entry**, or press **Contra entry** on the Day Book. Pick the type, check From and To (each shows its balance for the day), type the amount and save. The form shows both balances before and after.
+
+It is saved as one Bank Entries row (Account = To, Credit / in = amount, Contra account = From). In the Day Book it shows as a Transfer on both accounts, and the Total leaves transfers out.
+
 ## Bank Ledger
 
 The Bank Ledger page shows bank accounts only: a statement per account with opening, received, paid and closing. Cash is in the Day Book.

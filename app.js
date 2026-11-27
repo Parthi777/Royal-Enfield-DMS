@@ -178,7 +178,7 @@
   const NAV = [
     ['', [['#/dashboard', 'Dashboard', 'dash', 'dashboard']]],
     ['Showroom', [['#/s/stock', 'Vehicle Stock', 'stock', 'stock'], ['#/s/bookings', 'Bookings', 'bookings', 'bookings'], ['#/s/sales', 'Vehicle Sales', 'sales', 'sales'], ['#/s/service', 'Service', 'service', 'service']]],
-    ['Accounts', [['#/s/expenses', 'Expenses', 'expenses', 'expenses'], ['#/s/bank', 'Bank Entries', 'bank', 'bank'], ['#/daybook', 'Day Book', 'daybook', 'ledger'], ['#/ledger', 'Bank Ledger', 'ledger', 'ledger']]],
+    ['Accounts', [['#/s/expenses', 'Expenses', 'expenses', 'expenses'], ['#/s/bank', 'Bank Entries', 'bank', 'bank'], ['#/contra', 'Contra Entry', 'contra', 'bank'], ['#/daybook', 'Day Book', 'daybook', 'ledger'], ['#/ledger', 'Bank Ledger', 'ledger', 'ledger']]],
     ['Control', [['#/approvals', 'Edit Requests', 'approvals', '@approvals'], ['#/masters', 'Masters', 'masters', 'masters'], ['#/access', 'Users & Roles', 'roles', '@users']]],
   ];
   const navAllowed = (k) => k === '@users' ? !!S.user.manageUsers
@@ -372,6 +372,93 @@
   }
 
   // ---------- day book: every entry of one day, cash and bank, opening and closing ----------
+  // ---------- contra entry: cash <-> bank and bank <-> bank, saved as one Bank Entries row ----------
+  const isCashAcc = (a) => /cash/i.test(String(a));
+  const contraKind = (from, to) => (isCashAcc(from) ? 'Cash deposit' : isCashAcc(to) ? 'Cash withdrawal' : 'Bank transfer');
+  async function pageContra() {
+    loading('Contra Entry');
+    const data = await api('GET', '/api/sheets/bank');
+    S.data.bank = data;
+    const rows = data.rows.filter((r) => r.G).map((r) => {
+      const inSide = +r.E > 0;   // credit on B means the money reached B from G
+      return { r, amt: inSide ? +r.E : +r.F || 0, from: inSide ? r.G : r.B, to: inSide ? r.B : r.G };
+    }).sort((a, b) => (a.r.A < b.r.A ? 1 : a.r.A > b.r.A ? -1 : b.r._row - a.r._row));
+    const add = canDo('bank', 'add');
+    shell('Contra Entry', 'Money moved between cash and a bank, or between two banks',
+      add ? `<button class="btn primary" id="newc">${ic('plus')}<span class="new-label">New contra entry</span></button>` : '', `
+      <div class="panel"><div class="panel-h"><h2>Contra entries</h2><small>${rows.length}</small></div>
+      ${rows.length ? `<div class="tbl-wrap"><table><thead><tr><th>Date</th><th>Type</th><th>From</th><th>To</th><th class="hide-m">Particulars</th><th class="num">Amount</th></tr></thead><tbody>
+        ${rows.map((x) => `<tr class="click" data-row="${x.r._row}"><td>${esc(fdate(x.r.A))}</td><td>${esc(contraKind(x.from, x.to))}</td><td>${esc(x.from)}</td><td>${esc(x.to)}</td><td class="hide-m wrap">${esc(x.r.C)}</td><td class="num strong">${inr(x.amt, false)}</td></tr>`).join('')}
+      </tbody></table></div>` : `<div class="empty">No contra entries yet.${add ? ' Use “New contra entry” when cash goes to the bank, cash comes from the bank, or money moves between banks.' : ''}</div>`}</div>
+      <p class="hint" style="margin:10px 2px">Each contra entry is saved in Bank Entries. In the Day Book it shows as a Transfer on both accounts: the money leaves one account and reaches the other, so the total does not change.</p>`);
+    const nb = document.getElementById('newc'); if (nb) nb.onclick = () => openContra();
+    document.querySelectorAll('tr[data-row]').forEach((tr) => (tr.onclick = () => openRow('bank', Number(tr.dataset.row))));
+  }
+  async function openContra(day) {
+    const accts = S.lists.accounts || [];
+    const cash = accts.find(isCashAcc) || '';
+    const banks = accts.filter((a) => a !== cash);
+    const date = day || todayIso();
+    let bal = null;   // closing balance on that day, when the role can see the books
+    if (canDo('ledger', 'view')) {
+      try { const db = await api('GET', `/api/daybook?date=${date}`); bal = Object.fromEntries(db.accounts.map((a) => [a.account, a.closing])); } catch { bal = null; }
+    }
+    const KINDS = [['deposit', 'Cash deposit: cash taken to the bank'], ['withdrawal', 'Cash withdrawal: cash brought from the bank'], ['transfer', 'Bank transfer: from one bank to another']];
+    const opts = (sel) => accts.map((a) => `<option value="${esc(a)}" ${a === sel ? 'selected' : ''}>${esc(a)}${bal && a in bal ? ' · ' + inr(bal[a], false) : ''}</option>`).join('');
+    const d = drawer(`
+      <div class="drawer-h"><div><h3>New contra entry</h3><small>Money moved between your own accounts</small></div><div class="grow"></div><button class="icon-btn" data-close aria-label="Close">${ic('x')}</button></div>
+      <form class="drawer-b" id="cf" novalidate autocomplete="off">
+        <div class="fgroup"><h4>What happened</h4><div class="fgrid">
+          <div class="field" style="grid-column:1/-1"><label>Type <span class="req">*</span></label><select name="kind">${KINDS.map(([v, t]) => `<option value="${v}">${esc(t)}</option>`).join('')}</select></div>
+          <div class="field"><label>From: money leaves <span class="req">*</span></label><select name="from">${opts(cash)}</select></div>
+          <div class="field"><label>To: money reaches <span class="req">*</span></label><select name="to">${opts(banks[0])}</select></div>
+          <div class="field"><label>Date <span class="req">*</span></label><input type="date" name="A" value="${esc(date)}" max="${todayIso()}"></div>
+          <div class="field"><label>Amount <span class="req">*</span></label><input type="number" inputmode="decimal" min="0" step="any" name="amt" placeholder="₹"></div>
+          <div class="field" style="grid-column:1/-1"><label>Particulars</label><input type="text" name="C" maxlength="200" placeholder="e.g. Cash sales of 27 Nov, deposit slip 4512"><small class="fhint">Leave empty and it fills in by itself.</small></div>
+        </div></div>
+        <div class="fgroup"><h4>After saving</h4><div id="cprev" class="hint">Choose the accounts and type the amount.</div></div>
+      </form>
+      <div class="drawer-f"><div class="grow"></div><button class="btn" data-close>Cancel</button><button class="btn primary" id="cs">${ic('check')}Save entry</button></div>`);
+    const f = d.querySelector('#cf');
+    const val = () => Object.fromEntries(new FormData(f));
+    f.kind.onchange = () => {
+      const k = f.kind.value;
+      if (k === 'deposit') { f.from.value = cash; f.to.value = banks[0] || ''; }
+      if (k === 'withdrawal') { f.from.value = banks[0] || ''; f.to.value = cash; }
+      if (k === 'transfer') { f.from.value = banks[0] || ''; f.to.value = banks[1] || ''; }
+      preview();
+    };
+    const preview = () => {
+      const v = val(); const amt = Number(v.amt) || 0;
+      const el = d.querySelector('#cprev');
+      if (!v.from || !v.to || v.from === v.to) { el.innerHTML = '<span class="out">From and To must be two different accounts.</span>'; return; }
+      if (!amt) { el.textContent = 'Type the amount.'; return; }
+      const line = (a, sign) => bal && a in bal
+        ? `<b>${esc(a)}</b>: ${inr(bal[a], false)} → <b>${inr(bal[a] + sign * amt, false)}</b>`
+        : `<b>${esc(a)}</b>: ${sign > 0 ? '+' : '−'}${inr(amt, false)}`;
+      const low = bal && v.from in bal && bal[v.from] - amt < 0;
+      el.innerHTML = `${line(v.from, -1)}<br>${line(v.to, 1)}${low ? `<br><span class="out">${esc(v.from)} would go below zero on this day. Check the amount and the date.</span>` : ''}`;
+    };
+    f.addEventListener('input', preview); f.from.onchange = preview; f.to.onchange = preview;
+    preview();
+    d.querySelector('#cs').onclick = async () => {
+      const v = val(); const amt = Number(v.amt);
+      if (!v.A) return toast('Pick the date', true);
+      if (!v.from || !v.to || v.from === v.to) return toast('From and To must be two different accounts', true);
+      if (!(amt > 0)) return toast('Type the amount', true);
+      const type = isCashAcc(v.from) ? 'Cash Deposit' : isCashAcc(v.to) ? 'Cash Withdrawal' : 'Transfer';
+      const text = v.C.trim() || (type === 'Cash Deposit' ? `Cash deposited into ${v.to}` : type === 'Cash Withdrawal' ? `Cash withdrawn from ${v.from}` : `Transfer from ${v.from} to ${v.to}`);
+      const btn = d.querySelector('#cs'); btn.disabled = true;
+      try {
+        await api('POST', '/api/sheets/bank', { A: v.A, B: v.to, C: text, D: type, E: String(amt), G: v.from });
+        closeDrawer();
+        toast(`Saved: ${inr(amt, false)} from ${v.from} to ${v.to}`);
+        if (location.hash === '#/contra') pageContra();
+        else if (location.hash === '#/daybook') { S.dbDate = v.A; pageDaybook(); }
+      } catch (e) { btn.disabled = false; toast(e.message, true); }
+    };
+  }
+
   async function pageDaybook() {
     S.dbDate = S.dbDate || todayIso();
     loading('Day Book');
@@ -381,6 +468,8 @@
     const longDate = new Date(S.dbDate + 'T00:00:00').toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
     const KIND = { receipt: ['green', 'Receipt'], payment: ['red', 'Payment'], contra: ['grey', 'Transfer'] };
     const tin = d.entries.reduce((s, e) => s + e.in, 0), tout = d.entries.reduce((s, e) => s + e.out, 0);
+    // moving money between our own accounts (contra) is not money in or out of the business
+    const realIn = d.entries.reduce((s, e) => s + (e.kind === 'contra' ? 0 : e.in), 0), realOut = d.entries.reduce((s, e) => s + (e.kind === 'contra' ? 0 : e.out), 0);
     const card = (label, g, cls) => `<div class="db-card ${cls}"><div class="h">${label}</div>
       <dl><div><dt>Opening</dt><dd>${inr(g.opening, false)}</dd></div><div><dt>Received</dt><dd class="${g.received ? 'in' : 'muted'}">${g.received ? '+' + inr(g.received, false) : '–'}</dd></div>
       <div><dt>Paid</dt><dd class="${g.paid ? 'out' : 'muted'}">${g.paid ? '−' + inr(g.paid, false) : '–'}</dd></div><div class="cl"><dt>Closing</dt><dd>${inr(g.closing, false)}</dd></div></dl></div>`;
@@ -388,11 +477,11 @@
       <div class="db-nav"><button class="icon-btn" id="dprev" aria-label="Previous day">${ic('prev')}</button>
         <input type="date" id="ddate" value="${S.dbDate}" max="${todayIso()}" aria-label="Day">
         <button class="icon-btn" id="dnext" aria-label="Next day" ${isToday ? 'disabled' : ''}>${ic('next')}</button>
-        ${isToday ? '' : '<button class="btn" id="dtoday">Today</button>'}</div>` + exportBtn(), `
+        ${isToday ? '' : '<button class="btn" id="dtoday">Today</button>'}</div>` + (canDo('bank', 'add') ? `<button class="btn" id="dcontra">${ic('contra')}<span class="new-label">Contra entry</span></button>` : '') + exportBtn(), `
       <div class="db-cards">
         ${card('Cash', d.cash, 'cash')}
         ${card('Bank accounts', d.bank, 'bank')}
-        ${card('Total', { opening: d.cash.opening + d.bank.opening, received: d.cash.received + d.bank.received, paid: d.cash.paid + d.bank.paid, closing: d.cash.closing + d.bank.closing }, 'total')}
+        ${card('Total', { opening: d.cash.opening + d.bank.opening, received: realIn, paid: realOut, closing: d.cash.closing + d.bank.closing }, 'total')}
       </div>
       <div class="panel" style="margin-top:16px"><div class="panel-h"><h2>Entries</h2><small>${d.entries.length} on this day</small></div>
         ${d.entries.length ? `<div class="tbl-wrap"><table><thead><tr><th>Particulars</th><th class="hide-m">Type</th><th>Account</th><th class="hide-m">From</th><th class="num">Received (in)</th><th class="num">Paid (out)</th></tr></thead><tbody>
@@ -404,11 +493,12 @@
         <thead><tr><th>Account</th><th class="num">Opening</th><th class="num">Received</th><th class="num">Paid</th><th class="num">Closing</th></tr></thead><tbody>
         ${d.accounts.map((a) => `<tr><td class="strong">${esc(a.account)}</td><td class="num">${inr(a.opening)}</td><td class="num ${a.received ? 'in' : 'muted'}">${inr(a.received)}</td><td class="num ${a.paid ? 'out' : 'muted'}">${inr(a.paid)}</td><td class="num strong">${inr(a.closing, false)}</td></tr>`).join('')}
       </tbody></table></div></div>
-      <p class="hint" style="margin:10px 2px">Receipts: booking advances, sale payments, finance DD, service bills and other money received. Payments: expenses. Transfers: cash deposits and bank-to-bank moves, shown on both accounts.</p>`);
+      <p class="hint" style="margin:10px 2px">Receipts: booking advances, sale payments, finance DD, service bills and other money received. Payments: expenses. Transfers (contra entries): cash deposits, withdrawals and bank-to-bank moves, shown on both accounts and left out of the Total.</p>`);
     const go = (v) => { S.dbDate = v; pageDaybook(); };
     document.getElementById('dprev').onclick = () => go(shift(-1));
     const nx = document.getElementById('dnext'); if (nx) nx.onclick = () => go(shift(1));
     const td = document.getElementById('dtoday'); if (td) td.onclick = () => go(todayIso());
+    const dc = document.getElementById('dcontra'); if (dc) dc.onclick = () => openContra(S.dbDate);
     document.getElementById('ddate').onchange = (e) => e.target.value && go(e.target.value);
     document.querySelectorAll('tr[data-ref]').forEach((tr) => tr.dataset.ref && (tr.onclick = () => { const [k, r] = tr.dataset.ref.split(':'); if (canDo(k, 'view')) openRow(k, Number(r)); }));
     wireExport(() => ({
@@ -416,7 +506,7 @@
       sections: [
         { heading: 'Summary', columns: [{ label: '' }, { label: 'Opening', type: 'money' }, { label: 'Received', type: 'money' }, { label: 'Paid', type: 'money' }, { label: 'Closing', type: 'money' }],
           rows: [['Cash', d.cash.opening, d.cash.received, d.cash.paid, d.cash.closing], ['Bank accounts', d.bank.opening, d.bank.received, d.bank.paid, d.bank.closing]],
-          totals: ['Total', d.cash.opening + d.bank.opening, d.cash.received + d.bank.received, d.cash.paid + d.bank.paid, d.cash.closing + d.bank.closing] },
+          totals: ['Total (without transfers)', d.cash.opening + d.bank.opening, realIn, realOut, d.cash.closing + d.bank.closing] },
         { heading: 'Entries', columns: [{ label: 'Particulars' }, { label: 'Type' }, { label: 'Account' }, { label: 'From' }, { label: 'Received', type: 'money' }, { label: 'Paid', type: 'money' }],
           rows: d.entries.map((e) => [e.text, KIND[e.kind][1], e.account, e.from, e.in || '', e.out || '']), totals: ['Total', '', '', '', tin, tout] },
         { heading: 'Balances by account', columns: [{ label: 'Account' }, { label: 'Opening', type: 'money' }, { label: 'Received', type: 'money' }, { label: 'Paid', type: 'money' }, { label: 'Closing', type: 'money' }],
@@ -1186,12 +1276,13 @@
     closeDrawer();
     const h = location.hash || firstPage() || '#/dashboard';
     if (h === '#/s/payments') { location.hash = '#/s/sales'; return; }  // payments live in the sale form
-    const key = h.startsWith('#/s/') ? h.slice(4) : h === '#/ledger' || h === '#/daybook' ? 'ledger' : h === '#/access' ? '@users' : h === '#/approvals' ? '@approvals' : h === '#/masters' ? 'masters' : 'dashboard';
+    const key = h.startsWith('#/s/') ? h.slice(4) : h === '#/ledger' || h === '#/daybook' ? 'ledger' : h === '#/contra' ? 'bank' : h === '#/access' ? '@users' : h === '#/approvals' ? '@approvals' : h === '#/masters' ? 'masters' : 'dashboard';
     if (!navAllowed(key)) return route404();
     try {
       if (h.startsWith('#/s/')) await pageSheet(h.slice(4));
       else if (h === '#/ledger') await pageLedger();
       else if (h === '#/daybook') await pageDaybook();
+      else if (h === '#/contra') await pageContra();
       else if (h === '#/approvals') await pageApprovals();
       else if (h === '#/access') await pageAccess();
       else if (h === '#/masters') await pageMasters();
