@@ -248,7 +248,7 @@ app.use((err, req, res, next) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`RE Showroom app on :${PORT}  ${demo ? '(DEMO MODE: not connected to the Google Sheet, data kept in memory)' : '(Google Sheet: ' + process.env.SHEET_ID + ', service account ' + store.email + ')'}`);
+  console.log(`RE Showroom app on :${PORT}  ${demo ? `(NOT CONNECTED to the Google Sheet: entries saved in ${store.saveFile || 'memory only'}${store.loadedFrom === store.saveFile ? ', loaded from it' : ''})` : '(Google Sheet: ' + process.env.SHEET_ID + ', service account ' + store.email + ')'}`);
   console.log(`Accounts saved in ${accounts.file}${accounts.persistent ? '' : '  (WARNING: not on a volume, accounts are lost on redeploy)'}`);
   if (accounts.setupCode) console.log(`\n  FIRST-TIME SETUP CODE: ${accounts.setupCode}\n  Open the app and use this code to create the Admin account.\n`);
 });

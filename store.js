@@ -44,11 +44,28 @@ class GoogleStore {
   }
 }
 
+// Without the Google Sheet, entries live here. With a save file (on the Railway volume) they are written
+// to disk after every change, so restarts and updates never lose them; a dated copy is kept for 14 days.
 class MemoryStore {
-  constructor(file) {
-    this.grid = JSON.parse(fs.readFileSync(file, 'utf8'));   // { sheet: { "row": [values from col A] } }
+  constructor(template, saveFile = null) {
+    this.saveFile = saveFile;
+    const start = saveFile && fs.existsSync(saveFile) ? saveFile : template;
+    this.grid = JSON.parse(fs.readFileSync(start, 'utf8'));   // { sheet: { "row": [values from col A] } }
     recompute(this.grid);   // fill the computed columns the way the sheet's formulas would
     this.email = 'demo-mode';
+    this.loadedFrom = start;
+  }
+  persist() {
+    if (!this.saveFile) return;
+    const body = JSON.stringify(this.grid);
+    const tmp = this.saveFile + '.tmp';
+    fs.writeFileSync(tmp, body);
+    fs.renameSync(tmp, this.saveFile);   // atomic: a crash mid-write leaves the old file whole
+    const dir = path.dirname(this.saveFile);
+    const day = new Date(Date.now() + 330 * 60000).toISOString().slice(0, 10);
+    fs.writeFileSync(path.join(dir, `app-data-${day}.json`), body);
+    const old = fs.readdirSync(dir).filter((f) => /^app-data-\d{4}-\d{2}-\d{2}\.json$/.test(f)).sort().slice(0, -14);
+    for (const f of old) fs.unlinkSync(path.join(dir, f));
   }
   async get(ranges) {
     return ranges.map((a1) => {
@@ -78,6 +95,7 @@ class MemoryStore {
       });
     }
     recompute(this.grid);
+    this.persist();
   }
 }
 
@@ -94,7 +112,10 @@ function isoToSerial(s) {
 
 function makeStore() {
   if (process.env.DEMO_MODE === 'true' || !process.env.GOOGLE_SERVICE_ACCOUNT_JSON) {
-    return { store: new MemoryStore(path.join(__dirname, 'demo-data.json')), demo: true };
+    const dir = process.env.DATA_DIR || (fs.existsSync('/data') ? '/data' : null);
+    let saveFile = null;
+    if (dir) { fs.mkdirSync(dir, { recursive: true }); saveFile = path.join(dir, 'app-data.json'); }
+    return { store: new MemoryStore(path.join(__dirname, 'demo-data.json'), saveFile), demo: true, saveFile };
   }
   let raw = process.env.GOOGLE_SERVICE_ACCOUNT_JSON.trim();
   if (!raw.startsWith('{')) raw = Buffer.from(raw, 'base64').toString('utf8');
