@@ -53,7 +53,7 @@
     }
   }
 
-  const bkTotal = (b) => (Number(b.G) || 0) + (Number(b.Q) || 0) + (Number(b.U) || 0);   // a booking's payments 1-3
+  const bkTotal = (b) => (S.schema.bookings?.pays || []).reduce((a, p) => a + (Number(b[p.amt]) || 0), 0);   // all of a booking's payments
 
   // pill colour from status text
   function pillText(s) {
@@ -614,7 +614,7 @@
     const mobTitle = { stock: (r) => `${r.B} · ${r.E}`, bookings: (r) => r.B, sales: (r) => r.B, payments: (r) => r.C || r.B, service: (r) => r.B, expenses: (r) => r.B, bank: (r) => r.C };
     const mobPill = { stock: 'H', bookings: 'K', sales: 'AJ', payments: '', service: '', expenses: '', bank: '' };
     const mobMeta = {
-      stock: (r) => [r.C, r.D, inr(r.G), r.I],
+      stock: (r) => [r.C, r.D, r.F ? 'Frame ' + r.F : '', inr(r.G), r.I],
       bookings: (r) => [fdate(r.A), r.D, r.C, r.J || '', String(r.O).startsWith('OVERDUE') ? r.O : ''],
       sales: (r) => [fdate(r.A), r.E, r.I, 'Cost ' + inr(r.Q), num(r.AI) > 0.5 ? 'Owes ' + inr(r.AI) : ''],
       payments: (r) => [fdate(r.A), inr(r.D), r.E, r.B, r.F ? 'UTR ' + r.F : ''],
@@ -798,9 +798,10 @@
         ${key === 'sales' ? '<div class="fgroup"><h4>Tally</h4><div class="tally" id="tally"></div></div>' : ''}
         ${groups.map((g) => { const inner = g.cols.map((c) => fieldHtml(colOf(key, c))).join(''); const used = g.extra && !isNew && g.cols.some((c) => rec[c] !== '' && rec[c] != null);
           const extra = g.extra ? ` data-extra="1"${used ? '' : ' hidden'}` : '';
-          return (inner ? `<div class="fgroup"${g.hpOnly ? ' data-hp="1"' : ''}${extra}><h4>${esc(g.title)}</h4><div class="fgrid">${inner}</div></div>` : '')
+          const rm = g.pay && g.cols.every((c) => canEdit(colOf(key, c))) ? `<button type="button" class="link rmpay" data-rmpay="${g.pay}" aria-label="Remove ${esc(g.title)}">${ic('x')}Remove</button>` : '';
+          return (inner ? `<div class="fgroup"${g.hpOnly ? ' data-hp="1"' : ''}${extra}${g.pay ? ` data-pay="${g.pay}"` : ''}><h4>${esc(g.title)}${rm}</h4><div class="fgrid">${inner}</div></div>` : '')
             + (key === 'sales' && g.title === 'Vehicle cost' ? '<div class="fgroup" id="paygrp"></div>' : '')
-            + (key === 'bookings' && g.title === 'Payment 3' && canDo('bookings', 'add') ? `<div class="addbpay"><button type="button" class="btn sm" id="addbpay">${ic('plus')}Add payment</button><small class="muted">Paid in parts, e.g. cash and GPay? Add up to 3 payments.</small></div>` : ''); }).join('')}
+            + (key === 'bookings' && g.pay && g.pay === sh.pays.length && canDo('bookings', 'add') ? `<div class="addbpay"><button type="button" class="btn sm" id="addbpay">${ic('plus')}Add payment</button><small class="muted">Paid in parts, e.g. cash and GPay? Add up to ${sh.pays.length} payments.</small></div>` : ''); }).join('')}
       </form>
       <div class="drawer-f">
         ${!isNew && lockedAny && canDo(key, 'add') && !approved && !pending && !pendingDel ? `<button class="btn" id="reqedit">${ic('shield')}Request edit</button>` : ''}
@@ -877,7 +878,7 @@
       }
     };
     f.addEventListener('input', sync);
-    // bookings: payment 2 and 3 appear one at a time
+    // bookings: payments 2 to 10 appear one at a time
     const abp = d.querySelector('#addbpay');
     if (abp) {
       const nextHidden = () => d.querySelector('.fgroup[data-extra][hidden]');
@@ -892,6 +893,16 @@
       };
       showBtn();
     }
+    // Remove: clears that payment's fields (payment 2 onwards also hides); saved on Save
+    d.querySelectorAll('[data-rmpay]').forEach((b) => (b.onclick = () => {
+      const g = b.closest('.fgroup');
+      const has = [...g.querySelectorAll('[name]')].some((el) => el.value !== '');
+      if (has && !confirm(`Remove ${g.querySelector('h4').firstChild.textContent.trim()}? Its amount, account and UTR are cleared when you press Save.`)) return;
+      g.querySelectorAll('[name]').forEach((el) => { el.value = ''; });
+      if (g.dataset.extra) g.hidden = true;
+      if (abp) abp.parentElement.hidden = !d.querySelector('.fgroup[data-extra][hidden]');
+      read(); sync();
+    }));
     // a mobile number already in Bookings fills the customer (and, in a sale, the allotted engine)
     let lastMob = '';
     const findCustomer = (value) => {

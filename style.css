@@ -426,3 +426,6 @@ button.link { background: none; border: 0; color: var(--teal-d); font: inherit; 
 .fgroup[hidden], .addbpay[hidden] { display: none; }
 .addbpay { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 0 0 16px; }
 .addbpay small { font-size: 12.5px; }
+.fgroup[data-pay] h4 { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+button.link.rmpay { display: inline-flex; align-items: center; gap: 4px; color: var(--red-d, #b42318); font-size: 13px; }
+button.link.rmpay svg { width: 14px; height: 14px; }

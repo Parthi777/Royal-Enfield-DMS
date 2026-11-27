@@ -4,6 +4,23 @@
 // list: key into the Masters lists (see MASTERS below)
 
 const FIRST_ROW = 3;
+
+// A booking amount paid in parts: up to 10 payments. Payment 1 is on the booking date.
+// Columns: 1 = G/H/P, 2 = T/Q/R/S, 3 = X/U/V/W, 4..10 = AA..BB (date, amount, received in, UTR).
+const BOOKING_PAYS = [
+  { n: 1, date: '', amt: 'G', acc: 'H', utr: 'P' },
+  { n: 2, date: 'T', amt: 'Q', acc: 'R', utr: 'S' },
+  { n: 3, date: 'X', amt: 'U', acc: 'V', utr: 'W' },
+];
+for (let n = 4; n <= 10; n++) {
+  const b = 27 + (n - 4) * 4, L = (i) => colLetterOf(b + i);
+  BOOKING_PAYS.push({ n, date: L(0), amt: L(1), acc: L(2), utr: L(3) });
+}
+function colLetterOf(n) {
+  let s = '';
+  while (n > 0) { const m = (n - 1) % 26; s = String.fromCharCode(65 + m) + s; n = Math.floor((n - 1) / 26); }
+  return s;
+}
 const LAST_ROW = 1002;
 
 const SHEETS = {
@@ -21,15 +38,13 @@ const SHEETS = {
       { c: 'I', label: 'Allotted / sold to', type: 'auto' },
       { c: 'J', label: 'Days in stock', type: 'auto' },
     ],
-    list: ['A', 'B', 'C', 'D', 'E', 'G', 'H', 'I', 'J'],
+    list: ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J'],
   },
   bookings: {
-    name: 'Bookings', title: 'Bookings', icon: 'calendar', last: 'Z', key: 'B',
+    name: 'Bookings', title: 'Bookings', icon: 'calendar', last: 'BB', key: 'B',
     groups: [
       { title: 'Customer & vehicle', cols: ['A', 'C', 'B', 'Z', 'D', 'E', 'F', 'I', 'J'] },
-      { title: 'Payment 1', cols: ['G', 'H', 'P'] },
-      { title: 'Payment 2', cols: ['T', 'Q', 'R', 'S'], extra: true },
-      { title: 'Payment 3', cols: ['X', 'U', 'V', 'W'], extra: true },
+      // Payment 1..10 groups are added below from BOOKING_PAYS
       { title: 'Status', cols: ['Y', 'K', 'L', 'M', 'N', 'O'] },
     ],
     cols: [
@@ -39,18 +54,6 @@ const SHEETS = {
       { c: 'D', label: 'Model', type: 'list', list: 'models', req: true },
       { c: 'E', label: 'Variant', type: 'list', list: 'variants' },
       { c: 'F', label: 'Colour', type: 'list', list: 'colours' },
-      { c: 'G', label: 'Payment 1 amount', type: 'money' },
-      { c: 'H', label: 'Received in', type: 'list', list: 'accounts' },
-      { c: 'P', label: 'UTR / reference no', type: 'text', refOf: 'H', amountOf: 'G' },
-      // a booking amount paid in parts (e.g. cash + GPay, or a second instalment later)
-      { c: 'T', label: 'Payment 2 date', type: 'date' },
-      { c: 'Q', label: 'Payment 2 amount', type: 'money' },
-      { c: 'R', label: 'Received in', type: 'list', list: 'accounts' },
-      { c: 'S', label: 'UTR / reference no', type: 'text', refOf: 'R', amountOf: 'Q' },
-      { c: 'X', label: 'Payment 3 date', type: 'date' },
-      { c: 'U', label: 'Payment 3 amount', type: 'money' },
-      { c: 'V', label: 'Received in', type: 'list', list: 'accounts' },
-      { c: 'W', label: 'UTR / reference no', type: 'text', refOf: 'V', amountOf: 'U' },
       { c: 'I', label: 'Commitment date', type: 'date' },
       { c: 'J', label: 'Allotted engine no', type: 'engine', engineFor: 'booking' },
       { c: 'Z', label: 'Sales executive', type: 'list', list: 'executives' },
@@ -196,4 +199,21 @@ function colLetter(n) {
 }
 const inputCols = (sh) => sh.cols.filter((c) => c.type !== 'auto');
 
-module.exports = { FIRST_ROW, LAST_ROW, SHEETS, MASTERS, MASTER_LISTS, ROLES, colIndex, colLetter, inputCols };
+// booking payment fields and groups, built from BOOKING_PAYS
+(() => {
+  const bk = SHEETS.bookings;
+  const cols = [], groups = [];
+  for (const p of BOOKING_PAYS) {
+    if (p.date) cols.push({ c: p.date, label: `Payment ${p.n} date`, type: 'date' });
+    cols.push({ c: p.amt, label: `Payment ${p.n} amount`, type: 'money' });
+    cols.push({ c: p.acc, label: 'Received in', type: 'list', list: 'accounts' });
+    cols.push({ c: p.utr, label: 'UTR / reference no', type: 'text', refOf: p.acc, amountOf: p.amt });
+    groups.push({ title: `Payment ${p.n}`, cols: [p.date, p.amt, p.acc, p.utr].filter(Boolean), pay: p.n, ...(p.n > 1 ? { extra: true } : {}) });
+  }
+  const at = bk.cols.findIndex((c) => c.c === 'I');
+  bk.cols.splice(at, 0, ...cols);
+  bk.groups.splice(1, 0, ...groups);
+  bk.pays = BOOKING_PAYS;
+})();
+
+module.exports = { BOOKING_PAYS, FIRST_ROW, LAST_ROW, SHEETS, MASTERS, MASTER_LISTS, ROLES, colIndex, colLetter, inputCols };

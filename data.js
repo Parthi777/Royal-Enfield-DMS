@@ -1,5 +1,5 @@
 // Business logic on top of the store: rows, masters, users, approvals, ledger, dashboard.
-const { FIRST_ROW, LAST_ROW, SHEETS, MASTERS, MASTER_LISTS, colIndex, colLetter, inputCols } = require('./schema');
+const { BOOKING_PAYS, FIRST_ROW, LAST_ROW, SHEETS, MASTERS, MASTER_LISTS, colIndex, colLetter, inputCols } = require('./schema');
 
 const IST_MIN = 330;
 const APPROVAL_MINUTES = 30;
@@ -236,7 +236,7 @@ class DataService {
     switch (key) {
       case 'bookings':
         r = digits(v.C) && all.find((x) => digits(x.C) === digits(v.C) && !/deliver/i.test(String(x.M)));
-        return r ? `${r.B} (mobile ${r.C}) already has an open booking: ${r.D}, ${rs((Number(r.G) || 0) + (Number(r.Q) || 0) + (Number(r.U) || 0))} on ${dt(r.A)}. Is this really a second booking?` : null;
+        return r ? `${r.B} (mobile ${r.C}) already has an open booking: ${r.D}, ${rs(bookingTotal(r))} on ${dt(r.A)}. Is this really a second booking?` : null;
       case 'sales':
         r = digits(v.C) && all.find((x) => digits(x.C) === digits(v.C) && same(x.A, v.A));
         return r ? `A sale for ${r.B} (mobile ${r.C}) is already saved on ${dt(r.A)}: engine ${r.D}. Is this really a second sale?` : null;
@@ -463,7 +463,7 @@ class DataService {
     const ex = { bookings: 'Z', sales: 'AL' }[key];
     if (ex && (ctx.lists.executives || []).length && !v[ex] && (!changed || ex in changed)) throw httpError(400, 'Pick the sales executive');
     if (key === 'bookings') {
-      for (const [n, amt, acc, date] of [[2, 'Q', 'R', 'T'], [3, 'U', 'V', 'X']]) {
+      for (const { n, amt, acc, date } of BOOKING_PAYS.slice(1)) {
         if (changed && ![amt, acc, date, 'A'].some((k) => k in changed)) continue;
         const has = Number(v[amt]) > 0;
         if (has && !v[acc]) throw httpError(400, `Payment ${n}: pick where it was received (Cash or the bank)`);
@@ -681,15 +681,12 @@ function safeText(v) {
 
 const DELETE_MARK = '[Delete]';
 
-// the payments of one booking: payment 1 on the booking date, payments 2 and 3 on their own dates
+// the payments of one booking: payment 1 on the booking date, payments 2..10 on their own dates
 function bookingPays(r, withoutAccount = false) {
-  return [
-    { n: 1, date: r.A, acc: r.H, amt: +r.G || 0, utr: r.P },
-    { n: 2, date: r.T || r.A, acc: r.R, amt: +r.Q || 0, utr: r.S },
-    { n: 3, date: r.X || r.A, acc: r.V, amt: +r.U || 0, utr: r.W },
-  ].filter((p) => p.amt > 0 && (withoutAccount || p.acc));
+  return BOOKING_PAYS.map((p) => ({ n: p.n, date: (p.date && r[p.date]) || r.A, acc: r[p.acc], amt: +r[p.amt] || 0, utr: r[p.utr] }))
+    .filter((p) => p.amt > 0 && (withoutAccount || p.acc));
 }
-const bookingTotal = (r) => (+r.G || 0) + (+r.Q || 0) + (+r.U || 0);
+const bookingTotal = (r) => BOOKING_PAYS.reduce((a, p) => a + (+r[p.amt] || 0), 0);
 
 function httpError(status, message) {
   const e = new Error(message);

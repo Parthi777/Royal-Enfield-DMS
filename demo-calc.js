@@ -3,6 +3,7 @@
 // a booking with an engine marks the vehicle Allotted, a sale marks it Sold and the booking Delivered, and so on.
 // Grid shape: { 'Sheet name': { '<row>': [values from column A] } }, dates as sheet serial numbers.
 
+const { BOOKING_PAYS } = require('./schema');
 const IST_MIN = 330;
 const FIRST = 3;
 
@@ -43,7 +44,7 @@ function recompute(grid) {
   // Bookings: K allotment, L stock for model, M delivery, N days left, O alert
   for (const b of bookings) {
     if (b.get('B') === '') { ['K', 'L', 'M', 'N', 'O', 'Y'].forEach((c) => b.set(c, '')); continue; }
-    b.set('Y', N(b.get('G')) + N(b.get('Q')) + N(b.get('U')));   // booking amount = all its payments
+    b.set('Y', BOOKING_PAYS.reduce((a, p) => a + N(b.get(p.amt)), 0));   // booking amount = all its payments
     const j = String(b.get('J'));
     b.set('K', j ? 'Vehicle Allotted' : 'Not Allotted');
     const cnt = stock.filter((s) => s.get('B') === b.get('D') && s.get('C') === b.get('E') && s.get('D') === b.get('F') && s.get('H') === 'Available').length;
@@ -65,7 +66,7 @@ function recompute(grid) {
     const parts = ['K', 'L', 'M', 'N', 'O'].map((c) => s.get(c));
     const Q = parts.every((x) => x === '') ? '' : parts.reduce((a, x) => a + N(x), 0) - N(s.get('P'));
     s.set('Q', Q);
-    const R = d === '' ? '' : bookings.filter((b) => String(b.get('J')) === d).reduce((a, b) => a + N(b.get('G')) + N(b.get('Q')) + N(b.get('U')), 0);
+    const R = d === '' ? '' : bookings.filter((b) => String(b.get('J')) === d).reduce((a, b) => a + BOOKING_PAYS.reduce((t, p) => t + N(b.get(p.amt)), 0), 0);
     s.set('R', R);
     if (Q === '') { ['AF', 'AG', 'AH', 'AI', 'AJ'].forEach((c) => s.set(c, '')); }
     else {
