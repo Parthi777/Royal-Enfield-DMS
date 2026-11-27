@@ -53,6 +53,8 @@
     }
   }
 
+  const bkTotal = (b) => (Number(b.G) || 0) + (Number(b.Q) || 0) + (Number(b.U) || 0);   // a booking's payments 1-3
+
   // pill colour from status text
   function pillText(s) {
     // sheet statuses come as CAPS or Title Case: show them in sentence case
@@ -709,7 +711,7 @@
   }
 
   // amounts far above normal are usually a typing slip (an extra zero): ask before saving
-  const HIGH = { stock: { G: 1500000 }, bookings: { G: 500000 }, service: { E: 100000 }, expenses: { E: 500000 },
+  const HIGH = { stock: { G: 1500000 }, bookings: { G: 500000, Q: 500000, U: 500000 }, service: { E: 100000 }, expenses: { E: 500000 },
     sales: { K: 1500000, AB: 1500000, AC: 1500000 }, payments: { D: 1500000 }, bank: { E: 5000000, F: 5000000 } };
   let salesBal = 0;
   function confirmUnusual(key, form, rec) {
@@ -783,7 +785,11 @@
       <form class="drawer-b" id="f" autocomplete="off" novalidate>
         ${notice}
         ${key === 'sales' ? '<div class="fgroup"><h4>Tally</h4><div class="tally" id="tally"></div></div>' : ''}
-        ${groups.map((g) => { const inner = g.cols.map((c) => fieldHtml(colOf(key, c))).join(''); return (inner ? `<div class="fgroup"${g.hpOnly ? ' data-hp="1"' : ''}><h4>${esc(g.title)}</h4><div class="fgrid">${inner}</div></div>` : '') + (key === 'sales' && g.title === 'Vehicle cost' ? '<div class="fgroup" id="paygrp"></div>' : ''); }).join('')}
+        ${groups.map((g) => { const inner = g.cols.map((c) => fieldHtml(colOf(key, c))).join(''); const used = g.extra && !isNew && g.cols.some((c) => rec[c] !== '' && rec[c] != null);
+          const extra = g.extra ? ` data-extra="1"${used ? '' : ' hidden'}` : '';
+          return (inner ? `<div class="fgroup"${g.hpOnly ? ' data-hp="1"' : ''}${extra}><h4>${esc(g.title)}</h4><div class="fgrid">${inner}</div></div>` : '')
+            + (key === 'sales' && g.title === 'Vehicle cost' ? '<div class="fgroup" id="paygrp"></div>' : '')
+            + (key === 'bookings' && g.title === 'Payment 3' && canDo('bookings', 'add') ? `<div class="addbpay"><button type="button" class="btn sm" id="addbpay">${ic('plus')}Add payment</button><small class="muted">Paid in parts, e.g. cash and GPay? Add up to 3 payments.</small></div>` : ''); }).join('')}
       </form>
       <div class="drawer-f">
         ${!isNew && lockedAny && canDo(key, 'add') && !approved && !pending && !pendingDel ? `<button class="btn" id="reqedit">${ic('shield')}Request edit</button>` : ''}
@@ -844,7 +850,7 @@
           const set = (c, v) => { const el = d.querySelector(`[data-auto="${c}"]`); if (el) el.innerHTML = v ? esc(v) : '<span class="muted">auto</span>'; };
           set('E', e?.model); set('F', e?.variant); set('G', e?.colour); set('H', e?.frame);
         }
-        const adv = !isNew ? num(rec.R) : (S.data.bookings?.rows || []).filter((b) => String(b.J) === String(form.D) && form.D).reduce((s, b) => s + num(b.G), 0);
+        const adv = !isNew ? num(rec.R) : (S.data.bookings?.rows || []).filter((b) => String(b.J) === String(form.D) && form.D).reduce((s, b) => s + bkTotal(b), 0);
         const docs = hp ? num(form.S) : 0;
         const total = num(form.K) + num(form.L) + num(form.M) + num(form.N) + num(form.O) - num(form.P) + docs;
         const paid = adv + savedPays.reduce((s, p) => s + num(p.D), 0) + newPays.reduce((s, p) => s + num(p.D), 0);
@@ -860,6 +866,21 @@
       }
     };
     f.addEventListener('input', sync);
+    // bookings: payment 2 and 3 appear one at a time
+    const abp = d.querySelector('#addbpay');
+    if (abp) {
+      const nextHidden = () => d.querySelector('.fgroup[data-extra][hidden]');
+      const showBtn = () => { abp.parentElement.hidden = !nextHidden(); };
+      abp.onclick = () => {
+        const g = nextHidden(); if (!g) return;
+        g.hidden = false;
+        const dt = g.querySelector('input[type=date]');
+        if (dt && !dt.value) dt.value = todayIso();
+        const amt = g.querySelector('input[inputmode=decimal], input[type=number]'); if (amt) amt.focus();
+        showBtn(); read(); sync();
+      };
+      showBtn();
+    }
     // a mobile number already in Bookings fills the customer (and, in a sale, the allotted engine)
     let lastMob = '';
     const findCustomer = (value) => {
@@ -880,8 +901,8 @@
         const sel = f.querySelector('[name="D"]');
         const allotted = b.J && sel && [...sel.options].some((o) => o.value === String(b.J));
         if (allotted && !sel.value) sel.value = b.J;
-        toast(allotted ? `Booking found: ${b.B}, ${b.D}. Engine ${b.J} and the advance ${inr(b.G)} are filled in.`
-          : `Booking found: ${b.B}, ${b.D}, advance ${inr(b.G)}. No vehicle allotted yet: pick the engine no.`);
+        toast(allotted ? `Booking found: ${b.B}, ${b.D}. Engine ${b.J} and the advance ${inr(bkTotal(b))} are filled in.`
+          : `Booking found: ${b.B}, ${b.D}, advance ${inr(bkTotal(b))}. No vehicle allotted yet: pick the engine no.`);
       }
       sync();
     };
@@ -895,7 +916,7 @@
       }
       if (key === 'sales' && ev.target.name === 'D' && isNew) {
         const b = (S.data.bookings?.rows || []).find((x) => String(x.J) === ev.target.value);
-        if (b) { ['B', 'C'].forEach((c) => { const el = f.querySelector(`[name="${c}"]`); if (el && !el.value) el.value = b[c]; }); toast(`Booking found: ${b.B}. Advance ${inr(b.G)} is added automatically.`); }
+        if (b) { ['B', 'C'].forEach((c) => { const el = f.querySelector(`[name="${c}"]`); if (el && !el.value) el.value = b[c]; }); toast(`Booking found: ${b.B}. Advance ${inr(bkTotal(b))} is added automatically.`); }
       }
       if (key === 'bookings' && ev.target.name === 'D') {
         const sel = f.querySelector('[name="J"]');
@@ -938,7 +959,7 @@
           catch (e) { payErr = e.message; break; }
         }
         if (payErr) toast(`${isNew ? 'Sale saved' : 'Saved'}, but payment ${paid + 1} wasn't: ${payErr}`, true);
-        else toast(payList.length ? `${isNew ? 'Sale saved' : 'Saved'} with ${paid} ${paid === 1 ? 'payment' : 'payments'}` : isNew ? 'Saved to the sheet' : 'Changes saved');
+        else toast(payList.length ? `${isNew ? 'Sale saved' : 'Saved'} with ${paid} ${paid === 1 ? 'payment' : 'payments'}` : isNew ? 'Saved' : 'Changes saved');
         closeDrawer();
         await refreshCore();
         pageSheet(key === 'payments' ? 'sales' : key);

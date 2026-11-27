@@ -27,7 +27,7 @@
    "Model",
    "Variant",
    "Colour",
-   "Booking Amount (₹)",
+   "Payment 1 Amount (₹)",
    "Received In",
    "Commitment Date",
    "Allotted Engine No",
@@ -35,7 +35,17 @@
    "Stock for this Model",
    "Delivery Status",
    "Days Left",
-   "Alert"
+   "Alert",
+   "UTR / Reference No",
+   "Payment 2 Amount (₹)",
+   "Payment 2 Received In",
+   "Payment 2 UTR / Ref No",
+   "Payment 2 Date",
+   "Payment 3 Amount (₹)",
+   "Payment 3 Received In",
+   "Payment 3 UTR / Ref No",
+   "Payment 3 Date",
+   "Booking Amount Total (₹)"
   ]
  },
  "Vehicle Sales": {

@@ -236,7 +236,7 @@ class DataService {
     switch (key) {
       case 'bookings':
         r = digits(v.C) && all.find((x) => digits(x.C) === digits(v.C) && !/deliver/i.test(String(x.M)));
-        return r ? `${r.B} (mobile ${r.C}) already has an open booking: ${r.D}, ${rs(r.G)} on ${dt(r.A)}. Is this really a second booking?` : null;
+        return r ? `${r.B} (mobile ${r.C}) already has an open booking: ${r.D}, ${rs((Number(r.G) || 0) + (Number(r.Q) || 0) + (Number(r.U) || 0))} on ${dt(r.A)}. Is this really a second booking?` : null;
       case 'sales':
         r = digits(v.C) && all.find((x) => digits(x.C) === digits(v.C) && same(x.A, v.A));
         return r ? `A sale for ${r.B} (mobile ${r.C}) is already saved on ${dt(r.A)}: engine ${r.D}. Is this really a second sale?` : null;
@@ -459,6 +459,16 @@ class DataService {
         throw httpError(400, `${what} went to ${acc}: enter its UTR / reference no (GPay, UPI, NEFT, card).`);
       }
     }
+    if (key === 'bookings') {
+      for (const [n, amt, acc, date] of [[2, 'Q', 'R', 'T'], [3, 'U', 'V', 'X']]) {
+        if (changed && ![amt, acc, date, 'A'].some((k) => k in changed)) continue;
+        const has = Number(v[amt]) > 0;
+        if (has && !v[acc]) throw httpError(400, `Payment ${n}: pick where it was received (Cash or the bank)`);
+        if (has && !v[date]) throw httpError(400, `Payment ${n}: pick the date it was paid`);
+        if (!has && (v[acc] || v[date])) throw httpError(400, `Payment ${n}: enter the amount, or clear its other fields`);
+        if (has && v.A && v[date] < v.A) throw httpError(400, `Payment ${n} date can't be before the booking date`);
+      }
+    }
     if (key === 'stock' && v.E !== undefined && v.E !== '') {
       if (others.some((r) => String(r.E).toLowerCase() === String(v.E).toLowerCase())) throw httpError(400, 'This engine number is already in stock');
     }
@@ -504,7 +514,7 @@ class DataService {
       lines.push({ date, account, in: inAmt || 0, out: outAmt || 0, text, from, kind, ref, seq: seq++ });
     };
     const utr = (x) => (x ? ` · UTR ${x}` : '');
-    bk.forEach((r) => add(r.A, r.H, +r.G || 0, 0, `Booking advance – ${r.B} (${r.D})${utr(r.P)}`, `Bookings · row ${r._row}`, 'receipt', ['bookings', r._row]));
+    bk.forEach((r) => bookingPays(r).forEach((p) => add(p.date, p.acc, p.amt, 0, `Booking advance${p.n > 1 ? ' (payment ' + p.n + ')' : ''} – ${r.B} (${r.D})${utr(p.utr)}`, `Bookings · row ${r._row}`, 'receipt', ['bookings', r._row])));
     sp.forEach((r) => add(r.A, r.E, +r.D || 0, 0, `Sale payment – ${r.C || ''} (${r.B})${utr(r.F)}${r.G ? ' · ' + r.G : ''}`, `Sale Payments · row ${r._row}`, 'receipt', ['payments', r._row]));
     sl.forEach((r) => add(r.AD, r.AE, +r.AC || 0, 0, `Finance DD – ${r.B} (${r.J || 'HP'})`, `Vehicle Sales · row ${r._row}`, 'receipt', ['sales', r._row]));
     sv.forEach((r) => add(r.A, r.F, +r.E || 0, 0, `Service – ${r.B} ${r.C}`.trim() + utr(r.G), `Service · row ${r._row}`, 'receipt', ['service', r._row]));
@@ -526,7 +536,7 @@ class DataService {
       };
     });
     const unposted = [
-      ...bk.filter((r) => +r.G > 0 && !r.H).map((r) => +r.G),
+      ...bk.flatMap((r) => bookingPays(r, true)).filter((p) => !p.acc).map((p) => p.amt),
       ...sp.filter((r) => +r.D > 0 && !r.E).map((r) => +r.D),
       ...sl.filter((r) => +r.AC > 0 && !r.AE).map((r) => +r.AC),
       ...sv.filter((r) => +r.E > 0 && !r.F).map((r) => +r.E),
@@ -570,12 +580,12 @@ class DataService {
       const sales = sl.filter((r) => pick(r.A)), books = bk.filter((r) => pick(r.A)), svc = sv.filter((r) => pick(r.A));
       const exps = ex.filter((r) => pick(r.A) && +r.E > 0);
       const deposits = be.filter((r) => pick(r.A) && r.D === 'Cash Deposit');
-      const collections = sum(bk.filter((r) => pick(r.A)), (r) => r.G) + sum(sp.filter((r) => pick(r.A)), (r) => r.D)
+      const collections = sum(bk.flatMap((r) => bookingPays(r, true)).filter((p) => pick(p.date)), (p) => p.amt) + sum(sp.filter((r) => pick(r.A)), (r) => r.D)
         + sum(sl.filter((r) => pick(r.AD)), (r) => r.AC) + sum(svc, (r) => r.E);
       const bal = DataService.balances(L.accounts, from, today);
       return {
         sold: sales.length, hp: sales.filter((r) => r.I === 'HP').length, cashSales: sales.filter((r) => r.I === 'Cash').length,
-        salesValue: sum(sales, (r) => r.Q), bookings: books.length, advance: sum(books, (r) => r.G),
+        salesValue: sum(sales, (r) => r.Q), bookings: books.length, advance: sum(books, (r) => bookingTotal(r)),
         service: svc.length, serviceValue: sum(svc, (r) => r.E), collections,
         expenses: sum(exps, (r) => r.E), expenseCount: exps.length,
         deposit: sum(deposits, (r) => (+r.E || 0) + (+r.F || 0)), depositCount: deposits.length,
@@ -597,7 +607,7 @@ class DataService {
       const d = new Date(Date.UTC(+month.slice(0, 4), +month.slice(5, 7) - 1 - k, 1));
       const ym = d.toISOString().slice(0, 7), pick = (x) => typeof x === 'string' && x.slice(0, 7) === ym;
       months.push({ month: `${ym}-01`, sold: sl.filter((r) => pick(r.A)).length,
-        collections: sum(bk.filter((r) => pick(r.A)), (r) => r.G) + sum(sp.filter((r) => pick(r.A)), (r) => r.D) + sum(sl.filter((r) => pick(r.AD)), (r) => r.AC) + sum(sv.filter((r) => pick(r.A)), (r) => r.E) });
+        collections: sum(bk.flatMap((r) => bookingPays(r, true)).filter((p) => pick(p.date)), (p) => p.amt) + sum(sp.filter((r) => pick(r.A)), (r) => r.D) + sum(sl.filter((r) => pick(r.AD)), (r) => r.AC) + sum(sv.filter((r) => pick(r.A)), (r) => r.E) });
     }
     // money in and out per day this month (for the chart)
     const days = [];
@@ -659,6 +669,16 @@ function safeText(v) {
 }
 
 const DELETE_MARK = '[Delete]';
+
+// the payments of one booking: payment 1 on the booking date, payments 2 and 3 on their own dates
+function bookingPays(r, withoutAccount = false) {
+  return [
+    { n: 1, date: r.A, acc: r.H, amt: +r.G || 0, utr: r.P },
+    { n: 2, date: r.T || r.A, acc: r.R, amt: +r.Q || 0, utr: r.S },
+    { n: 3, date: r.X || r.A, acc: r.V, amt: +r.U || 0, utr: r.W },
+  ].filter((p) => p.amt > 0 && (withoutAccount || p.acc));
+}
+const bookingTotal = (r) => (+r.G || 0) + (+r.Q || 0) + (+r.U || 0);
 
 function httpError(status, message) {
   const e = new Error(message);

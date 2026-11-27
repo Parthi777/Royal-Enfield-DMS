@@ -423,3 +423,6 @@ button.link { background: none; border: 0; color: var(--teal-d); font: inherit; 
   .search { max-width: none; }
   .drawer-f .btn { padding: 8px 12px; }
 }
+.fgroup[hidden], .addbpay[hidden] { display: none; }
+.addbpay { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 0 0 16px; }
+.addbpay small { font-size: 12.5px; }

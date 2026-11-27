@@ -51,6 +51,10 @@ Users and roles are saved in `accounts.json` in the app's data folder.
 - **Edit Log:** every change is recorded there.
 - **Access:** set it per role under Users & Roles (No access, View or Edit). The Admin always has Edit.
 
+## Bookings: split payments
+
+A booking amount can come in up to 3 payments (for example cash + GPay, or a second instalment later). Payment 1 is on the booking date; **+ Add payment** shows Payment 2 and then Payment 3, each with its own date, amount, account and UTR (needed for a bank). The **Booking amount** (column Y) is the total; the sale counts the total as the booking advance, and each payment goes to the Day Book and Bank Ledger on its own date and account.
+
 ## Vehicle Sales
 
 - **Customer lookup:** type the mobile number first. If that customer has an open booking, the name, the allotted engine and the booking advance fill in by themselves. In Bookings, a repeat customer's name fills in the same way.
