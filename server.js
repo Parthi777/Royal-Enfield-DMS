@@ -13,7 +13,7 @@ const PORT = process.env.PORT || 3000;
 const SHOWROOM = process.env.SHOWROOM_NAME || 'Pradhanaa Motors LLP';
 const SESSION_HOURS = 12;
 
-const { store, demo } = makeStore();
+const { store, demo, kind } = makeStore();
 const data = new DataService(store);
 const accounts = new Accounts();
 // signing key: env if given, else one generated once and kept with the accounts
@@ -76,7 +76,7 @@ const sheetKey = (req) => SHEETS[req.params.key]?.perm || req.params.key;
 const sameOrigin = (req, res, next) => (req.get('X-RE-App') === '1' ? next() : res.status(400).json({ error: 'Bad request' }));
 
 // ---------- public ----------
-app.get('/healthz', (req, res) => res.json({ ok: true, demo }));
+app.get('/healthz', (req, res) => res.json({ ok: true, demo, storage: kind }));
 app.get('/api/config', (req, res) => res.json({ demo, showroom: SHOWROOM, needsSetup: accounts.needsSetup(), persistent: accounts.persistent }));
 
 app.post('/api/auth/setup', sameOrigin, (req, res, next) => {
@@ -243,12 +243,12 @@ app.use((err, req, res, next) => {
   let msg = err.message || 'Something went wrong';
   if (/protected cell|protected range/i.test(msg)) msg = 'The Google Sheet blocked this write: add the app\'s service account as an editor of the sheet protections (see README).';
   else if (status >= 500 && /PERMISSION_DENIED|caller does not have permission/i.test(msg)) msg = 'The app cannot open the Google Sheet. Share the sheet with the service account email as Editor.';
-  else if (status >= 500) msg = 'Server error. Please try again.';
+  else if (status >= 500 && !err.keepMessage) msg = 'Server error. Please try again.';
   res.status(status).json(err.dup ? { error: msg, dup: true } : { error: msg });
 });
 
-app.listen(PORT, () => {
-  console.log(`RE Showroom app on :${PORT}  ${demo ? `(NOT CONNECTED to the Google Sheet: entries saved in ${store.saveFile || 'memory only'}${store.loadedFrom === store.saveFile ? ', loaded from it' : ''})` : '(Google Sheet: ' + process.env.SHEET_ID + ', service account ' + store.email + ')'}`);
+Promise.resolve(store.ready).then(() => app.listen(PORT, () => {
+  console.log(`RE Showroom app on :${PORT}  ${kind === 'postgres' ? `(DATABASE: PostgreSQL, ${store.rowCount} rows, loaded from ${store.loadedFrom})` : demo ? `(NOT CONNECTED to the Google Sheet: entries saved in ${store.saveFile || 'memory only'}${store.loadedFrom === store.saveFile ? ', loaded from it' : ''})` : '(Google Sheet: ' + process.env.SHEET_ID + ', service account ' + store.email + ')'}`);
   console.log(`Accounts saved in ${accounts.file}${accounts.persistent ? '' : '  (WARNING: not on a volume, accounts are lost on redeploy)'}`);
   if (accounts.setupCode) console.log(`\n  FIRST-TIME SETUP CODE: ${accounts.setupCode}\n  Open the app and use this code to create the Admin account.\n`);
-});
+})).catch((e) => { console.error('Could not open the database:', e.message); process.exit(1); });

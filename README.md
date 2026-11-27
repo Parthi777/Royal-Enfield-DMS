@@ -128,6 +128,16 @@ Every list has **Export → Excel / PDF**: stock, bookings, sales, sale payments
 - PDFs show the on-screen columns, sized to fit the page, with page numbers.
 - One export runs at a time per person, up to 5,000 rows. Filter the list first for more.
 
+## Database (PostgreSQL on Railway)
+
+With `DATABASE_URL` set (Railway: a Postgres service in the same project, variable `DATABASE_URL = ${{Postgres.DATABASE_URL}}`), the app keeps every entry in PostgreSQL. It takes priority over the Google Sheet and over `DEMO_MODE`.
+
+- Table `sheet_rows (sheet, row_no, vals jsonb, updated_at)`: one record per row of each tab, in the same layout as the Google Sheet, so the same rules, formulas (worked out in the app) and reports apply.
+- Every change is saved in one transaction before the app answers. If the database can't be reached, the save is refused ("Could not save to the database") and nothing half-saved shows on screen; reading keeps working, and saving recovers by itself when the database is back.
+- First start on an empty database: entries already kept on the volume (`/data/app-data.json`) are brought in; otherwise it starts from the empty layout.
+- Extra safety: a JSON copy of all data is written to the volume once every 10 minutes of activity (`/data/db-backup-YYYY-MM-DD.json`, last 14 days). Turn on Railway's own backups for the Postgres service too.
+- `GET /healthz` shows `"storage": "postgres"` when the database is in use.
+
 ## Demo mode
 
 Without `GOOGLE_SERVICE_ACCOUNT_JSON` (or with `DEMO_MODE=true`), the app starts empty and keeps entries in memory only: they are lost when the app restarts. Sign-in, roles and reports all work, but nothing is saved to the sheet.
