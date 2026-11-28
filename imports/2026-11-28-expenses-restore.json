@@ -1,0 +1,755 @@
+{
+ "name": "2026-11-28-expenses-restore",
+ "masters": {
+  "expenseCats": [
+   "Fuel",
+   "Marketing & Ads",
+   "Misc",
+   "Rent",
+   "Repairs & Maintenance",
+   "Salary",
+   "Stationery & Printing",
+   "Tea & Snacks",
+   "Telephone & Internet",
+   "Transport"
+  ]
+ },
+ "counted": {
+  "expenses": [
+   "A",
+   "B",
+   "E"
+  ]
+ },
+ "expenses": [
+  {
+   "A": "2026-11-27",
+   "B": "LADDER TRANSPORT CHARGE",
+   "C": "Rent",
+   "D": "Cash",
+   "E": 200,
+   "F": "",
+   "G": "ARUN"
+  },
+  {
+   "A": "2026-11-26",
+   "B": "ADVANCE AMOUNT FOR LADDER RENT (PRABHU)",
+   "C": "Rent",
+   "D": "Cash",
+   "E": 2000,
+   "F": "",
+   "G": ""
+  },
+  {
+   "A": "2026-11-27",
+   "B": "INFA ADVANCE AMOUNT LEDGER PRINTING",
+   "C": "Repairs & Maintenance",
+   "D": "Cash",
+   "E": 600,
+   "F": "",
+   "G": ""
+  },
+  {
+   "A": "2026-11-27",
+   "B": "CHAIR TRANSPORT CHARGE",
+   "C": "Rent",
+   "D": "Cash",
+   "E": 1000,
+   "F": "",
+   "G": ""
+  },
+  {
+   "A": "2026-11-27",
+   "B": "PRINTING FOR FOAM BOARD ADV",
+   "C": "Repairs & Maintenance",
+   "D": "Cash",
+   "E": 3000,
+   "F": "",
+   "G": ""
+  },
+  {
+   "A": "2026-11-27",
+   "B": "SOAP DISPENSERS",
+   "C": "Repairs & Maintenance",
+   "D": "Cash",
+   "E": 1955,
+   "F": "",
+   "G": ""
+  },
+  {
+   "A": "2026-11-27",
+   "B": "SUNFLIM FOR FRONT GLAZZING",
+   "C": "Repairs & Maintenance",
+   "D": "Cash",
+   "E": 15145,
+   "F": "",
+   "G": ""
+  },
+  {
+   "A": "2026-11-27",
+   "B": "MALAI DELIVERY",
+   "C": "Telephone & Internet",
+   "D": "Cash",
+   "E": 200,
+   "F": "",
+   "G": "FORMAL DELIVERY"
+  },
+  {
+   "A": "2026-11-27",
+   "B": "NAME TAG AND VISTING CARD AND FOAM BOARDS",
+   "C": "Repairs & Maintenance",
+   "D": "Cash",
+   "E": 2800,
+   "F": "",
+   "G": "INFA"
+  },
+  {
+   "A": "2026-11-17",
+   "B": "FLOOR MATT S",
+   "C": "Misc",
+   "D": "Cash",
+   "E": 4291,
+   "F": "J97267",
+   "G": "JEGAN METAL"
+  },
+  {
+   "A": "2026-11-27",
+   "B": "OIL TRAY AND WATER BOTTLES",
+   "C": "Misc",
+   "D": "Cash",
+   "E": 2250,
+   "F": "",
+   "G": "JEGAN METAL"
+  },
+  {
+   "A": "2026-11-27",
+   "B": "TOOLS PURCHASE",
+   "C": "Misc",
+   "D": "Cash",
+   "E": 9000,
+   "F": "",
+   "G": "TOOLS HUB"
+  },
+  {
+   "A": "2026-11-27",
+   "B": "GENSET DIESEL",
+   "C": "Fuel",
+   "D": "Cash",
+   "E": 900,
+   "F": "",
+   "G": ""
+  },
+  {
+   "A": "2026-11-27",
+   "B": "NEW VEHICLE WATER WASH",
+   "C": "Repairs & Maintenance",
+   "D": "Cash",
+   "E": 2800,
+   "F": "",
+   "G": ""
+  },
+  {
+   "A": "2026-11-27",
+   "B": "CLEANING AND STATIONARYS",
+   "C": "Stationery & Printing",
+   "D": "Cash",
+   "E": 4174,
+   "F": "",
+   "G": ""
+  },
+  {
+   "A": "2026-11-27",
+   "B": "TRANSPORT CHARGES WAREHOUSE TO SR AUTO",
+   "C": "Rent",
+   "D": "Cash",
+   "E": 400,
+   "F": "",
+   "G": ""
+  },
+  {
+   "A": "2026-11-27",
+   "B": "TRAINNING EXP SERVICE ADVISOR",
+   "C": "Transport",
+   "D": "Cash",
+   "E": 1000,
+   "F": "",
+   "G": ""
+  },
+  {
+   "A": "2026-11-27",
+   "B": "WATERWASH HOSE",
+   "C": "Repairs & Maintenance",
+   "D": "Cash",
+   "E": 985,
+   "F": "",
+   "G": ""
+  },
+  {
+   "A": "2026-11-27",
+   "B": "TILES POLISER AND BRUSH",
+   "C": "Repairs & Maintenance",
+   "D": "Cash",
+   "E": 190,
+   "F": "",
+   "G": ""
+  },
+  {
+   "A": "2026-11-27",
+   "B": "PAINTER WAGES",
+   "C": "Salary",
+   "D": "Cash",
+   "E": 1700,
+   "F": "",
+   "G": ""
+  },
+  {
+   "A": "2026-11-27",
+   "B": "SACK",
+   "C": "Repairs & Maintenance",
+   "D": "Cash",
+   "E": 200,
+   "F": "",
+   "G": ""
+  },
+  {
+   "A": "2026-11-27",
+   "B": "WAGES FOR CLEANING APPU",
+   "C": "Repairs & Maintenance",
+   "D": "Cash",
+   "E": 3800,
+   "F": "",
+   "G": ""
+  },
+  {
+   "A": "2026-11-27",
+   "B": "WATER BOTTLE",
+   "C": "Tea & Snacks",
+   "D": "Cash",
+   "E": 40,
+   "F": "",
+   "G": ""
+  },
+  {
+   "A": "2026-11-27",
+   "B": "PAINT",
+   "C": "Repairs & Maintenance",
+   "D": "Cash",
+   "E": 760,
+   "F": "",
+   "G": ""
+  },
+  {
+   "A": "2026-11-27",
+   "B": "CEMENT PURCHASE",
+   "C": "Repairs & Maintenance",
+   "D": "Cash",
+   "E": 390,
+   "F": "",
+   "G": ""
+  },
+  {
+   "A": "2026-11-27",
+   "B": "JEGAN METAL FLOOR MATT PURCHASE",
+   "C": "Repairs & Maintenance",
+   "D": "Cash",
+   "E": 3240,
+   "F": "",
+   "G": ""
+  },
+  {
+   "A": "2026-11-27",
+   "B": "TEA AND FOOD",
+   "C": "Tea & Snacks",
+   "D": "Cash",
+   "E": 2190,
+   "F": "",
+   "G": ""
+  },
+  {
+   "A": "2026-11-27",
+   "B": "TESTRIDE AND DELVEVERY FUEL",
+   "C": "Fuel",
+   "D": "Cash",
+   "E": 2169,
+   "F": "",
+   "G": ""
+  },
+  {
+   "A": "2026-11-13",
+   "B": "FUEL TRANSPOTATION LOCAL",
+   "C": "Fuel",
+   "D": "Cash",
+   "E": 3820,
+   "F": "",
+   "G": ""
+  },
+  {
+   "A": "2026-11-21",
+   "B": "A4 PHOTO SHEET",
+   "C": "Stationery & Printing",
+   "D": "Cash",
+   "E": 4359,
+   "F": "",
+   "G": ""
+  },
+  {
+   "A": "2026-11-27",
+   "B": "TRAINING (PRAGADEESH)",
+   "C": "Transport",
+   "D": "Cash",
+   "E": 400,
+   "F": "",
+   "G": ""
+  },
+  {
+   "A": "2026-11-27",
+   "B": "TEA",
+   "C": "Tea & Snacks",
+   "D": "Cash",
+   "E": 70,
+   "F": "",
+   "G": ""
+  },
+  {
+   "A": "2026-11-27",
+   "B": "TAG",
+   "C": "Stationery & Printing",
+   "D": "Cash",
+   "E": 105,
+   "F": "",
+   "G": ""
+  },
+  {
+   "A": "2026-11-27",
+   "B": "TAG",
+   "C": "Stationery & Printing",
+   "D": "Cash",
+   "E": 190,
+   "F": "",
+   "G": ""
+  },
+  {
+   "A": "2026-11-27",
+   "B": "PERMANENT MARKER",
+   "C": "Stationery & Printing",
+   "D": "Cash",
+   "E": 68,
+   "F": "",
+   "G": ""
+  },
+  {
+   "A": "2026-11-27",
+   "B": "PETROL (JUPITER)",
+   "C": "Fuel",
+   "D": "Cash",
+   "E": 200,
+   "F": "",
+   "G": ""
+  },
+  {
+   "A": "2026-11-27",
+   "B": "PETROL (JUPITER)",
+   "C": "Fuel",
+   "D": "Cash",
+   "E": 200,
+   "F": "",
+   "G": ""
+  },
+  {
+   "A": "2026-11-27",
+   "B": "G.MART",
+   "C": "Repairs & Maintenance",
+   "D": "Cash",
+   "E": 1227,
+   "F": "",
+   "G": ""
+  },
+  {
+   "A": "2026-11-27",
+   "B": "TILES CLEANER",
+   "C": "Stationery & Printing",
+   "D": "Cash",
+   "E": 150,
+   "F": "",
+   "G": ""
+  },
+  {
+   "A": "2026-11-27",
+   "B": "TEA",
+   "C": "Tea & Snacks",
+   "D": "Cash",
+   "E": 100,
+   "F": "",
+   "G": ""
+  },
+  {
+   "A": "2026-11-27",
+   "B": "Auto waste",
+   "C": "Repairs & Maintenance",
+   "D": "Cash",
+   "E": 500,
+   "F": "",
+   "G": ""
+  },
+  {
+   "A": "2026-11-27",
+   "B": "TEA",
+   "C": "Tea & Snacks",
+   "D": "Cash",
+   "E": 100,
+   "F": "",
+   "G": ""
+  },
+  {
+   "A": "2026-11-27",
+   "B": "Electrician",
+   "C": "Repairs & Maintenance",
+   "D": "Cash",
+   "E": 500,
+   "F": "",
+   "G": ""
+  },
+  {
+   "A": "2026-11-27",
+   "B": "SILICON GEL",
+   "C": "Repairs & Maintenance",
+   "D": "Cash",
+   "E": 200,
+   "F": "",
+   "G": ""
+  },
+  {
+   "A": "2026-11-27",
+   "B": "TEA",
+   "C": "Tea & Snacks",
+   "D": "Cash",
+   "E": 100,
+   "F": "",
+   "G": ""
+  },
+  {
+   "A": "2026-11-27",
+   "B": "GMA AUTO WALL",
+   "C": "Repairs & Maintenance",
+   "D": "Cash",
+   "E": 250,
+   "F": "",
+   "G": ""
+  },
+  {
+   "A": "2026-11-27",
+   "B": "INFA",
+   "C": "Repairs & Maintenance",
+   "D": "Cash",
+   "E": 280,
+   "F": "",
+   "G": ""
+  },
+  {
+   "A": "2026-11-27",
+   "B": "XEROX",
+   "C": "Stationery & Printing",
+   "D": "Cash",
+   "E": 100,
+   "F": "",
+   "G": ""
+  },
+  {
+   "A": "2026-11-27",
+   "B": "PETROL",
+   "C": "Fuel",
+   "D": "Cash",
+   "E": 200,
+   "F": "",
+   "G": ""
+  },
+  {
+   "A": "2026-11-27",
+   "B": "WATER CAN",
+   "C": "Tea & Snacks",
+   "D": "Cash",
+   "E": 240,
+   "F": "",
+   "G": ""
+  },
+  {
+   "A": "2026-11-27",
+   "B": "NIGHT FOOD",
+   "C": "Tea & Snacks",
+   "D": "Cash",
+   "E": 290,
+   "F": "",
+   "G": ""
+  },
+  {
+   "A": "2026-11-27",
+   "B": "CRANE",
+   "C": "Repairs & Maintenance",
+   "D": "Cash",
+   "E": 1700,
+   "F": "",
+   "G": ""
+  },
+  {
+   "A": "2026-11-27",
+   "B": "TEA",
+   "C": "Tea & Snacks",
+   "D": "Cash",
+   "E": 200,
+   "F": "",
+   "G": ""
+  },
+  {
+   "A": "2026-11-27",
+   "B": "TEA",
+   "C": "Tea & Snacks",
+   "D": "Cash",
+   "E": 50,
+   "F": "",
+   "G": ""
+  },
+  {
+   "A": "2026-11-27",
+   "B": "Soap",
+   "C": "Stationery & Printing",
+   "D": "Cash",
+   "E": 10,
+   "F": "",
+   "G": ""
+  },
+  {
+   "A": "2026-11-27",
+   "B": "Sales expenses (Paid to ibrahim )",
+   "C": "Repairs & Maintenance",
+   "D": "Cash",
+   "E": 7000,
+   "F": "",
+   "G": ""
+  },
+  {
+   "A": "2026-11-26",
+   "B": "Fuel",
+   "C": "Fuel",
+   "D": "Cash",
+   "E": 200,
+   "F": "",
+   "G": ""
+  },
+  {
+   "A": "2026-11-26",
+   "B": "Fuel",
+   "C": "Fuel",
+   "D": "Cash",
+   "E": 100,
+   "F": "",
+   "G": ""
+  },
+  {
+   "A": "2026-11-26",
+   "B": "Permanent Marker",
+   "C": "Stationery & Printing",
+   "D": "Cash",
+   "E": 68,
+   "F": "",
+   "G": ""
+  },
+  {
+   "A": "2026-11-26",
+   "B": "Hanger wooden style, Beco garbage bags large and small, Tissue",
+   "C": "Repairs & Maintenance",
+   "D": "Cash",
+   "E": 1127,
+   "F": "",
+   "G": ""
+  },
+  {
+   "A": "2026-11-26",
+   "B": "TAG",
+   "C": "Stationery & Printing",
+   "D": "Cash",
+   "E": 150,
+   "F": "",
+   "G": ""
+  },
+  {
+   "A": "2026-11-26",
+   "B": "TILES CLEANER",
+   "C": "Stationery & Printing",
+   "D": "Cash",
+   "E": 150,
+   "F": "",
+   "G": ""
+  },
+  {
+   "A": "2026-11-27",
+   "B": "TOTAL SERVICE TRAINING FIVE DAYS",
+   "C": "Transport",
+   "D": "Cash",
+   "E": 26000,
+   "F": "",
+   "G": ""
+  },
+  {
+   "A": "2026-11-20",
+   "B": "ULTIMATE SOLUTION INTERNET",
+   "C": "Telephone & Internet",
+   "D": "Cash",
+   "E": 8825,
+   "F": "",
+   "G": ""
+  },
+  {
+   "A": "2026-11-19",
+   "B": "SAFTY SHOE FOR TECH",
+   "C": "Repairs & Maintenance",
+   "D": "Cash",
+   "E": 7133,
+   "F": "",
+   "G": ""
+  },
+  {
+   "A": "2026-11-07",
+   "B": "HOUSE KEEPING",
+   "C": "Repairs & Maintenance",
+   "D": "Cash",
+   "E": 100,
+   "F": "",
+   "G": ""
+  },
+  {
+   "A": "2026-11-12",
+   "B": "TRANSPORT AND FOOD EXP",
+   "C": "Transport",
+   "D": "Cash",
+   "E": 4310,
+   "F": "",
+   "G": ""
+  },
+  {
+   "A": "2026-11-12",
+   "B": "WATER WASH MOTOR",
+   "C": "Misc",
+   "D": "Cash",
+   "E": 59000,
+   "F": "",
+   "G": ""
+  },
+  {
+   "A": "2026-11-27",
+   "B": "service manager training",
+   "C": "Transport",
+   "D": "Cash",
+   "E": 2000,
+   "F": "",
+   "G": ""
+  },
+  {
+   "A": "2026-11-17",
+   "B": "jbl amblifier and speakers",
+   "C": "Misc",
+   "D": "Cash",
+   "E": 50000,
+   "F": "",
+   "G": ""
+  },
+  {
+   "A": "2026-11-04",
+   "B": "water can",
+   "C": "Tea & Snacks",
+   "D": "Cash",
+   "E": 2440,
+   "F": "",
+   "G": ""
+  },
+  {
+   "A": "2026-11-05",
+   "B": "fuel for new vehicle",
+   "C": "Fuel",
+   "D": "Cash",
+   "E": 4346,
+   "F": "",
+   "G": ""
+  },
+  {
+   "A": "2026-11-03",
+   "B": "oil pump and fuel",
+   "C": "Misc",
+   "D": "Cash",
+   "E": 1800,
+   "F": "",
+   "G": ""
+  },
+  {
+   "A": "2026-11-03",
+   "B": "mop and seal stamp",
+   "C": "Stationery & Printing",
+   "D": "Cash",
+   "E": 390,
+   "F": "",
+   "G": ""
+  },
+  {
+   "A": "2026-11-27",
+   "B": "sim card with recharge",
+   "C": "Marketing & Ads",
+   "D": "Cash",
+   "E": 820,
+   "F": "",
+   "G": ""
+  },
+  {
+   "A": "2026-11-28",
+   "B": "service tools equipment",
+   "C": "Stationery & Printing",
+   "D": "Cash",
+   "E": 6800,
+   "F": "",
+   "G": ""
+  },
+  {
+   "A": "2026-10-27",
+   "B": "infa cards and stokes",
+   "C": "Marketing & Ads",
+   "D": "Cash",
+   "E": 2820,
+   "F": "",
+   "G": ""
+  },
+  {
+   "A": "2026-11-12",
+   "B": "eagle system purchase",
+   "C": "Stationery & Printing",
+   "D": "Cash",
+   "E": 22000,
+   "F": "",
+   "G": ""
+  },
+  {
+   "A": "2026-10-23",
+   "B": "tech training exp",
+   "C": "Transport",
+   "D": "Cash",
+   "E": 3200,
+   "F": "",
+   "G": "coimbatore traveling for motor"
+  },
+  {
+   "A": "2026-11-27",
+   "B": "keyboard and mouse",
+   "C": "Repairs & Maintenance",
+   "D": "Cash",
+   "E": 1075,
+   "F": "",
+   "G": ""
+  },
+  {
+   "A": "2026-11-27",
+   "B": "salary for technician siva and logu",
+   "C": "Salary",
+   "D": "Cash",
+   "E": 6566,
+   "F": "",
+   "G": ""
+  }
+ ]
+}
